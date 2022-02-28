@@ -1,0 +1,488 @@
+#  *
+#  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#  * SPDX-License-Identifier: MIT-0
+#  *
+#  * Permission is hereby granted, free of charge, to any person obtaining a copy of this
+#  * software and associated documentation files (the "Software"), to deal in the Software
+#  * without restriction, including without limitation the rights to use, copy, modify,
+#  * merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+#  * permit persons to whom the Software is furnished to do so.
+#  *
+#  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+#  * INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+#  * PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+#  * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+#  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+#  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#  *
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation template to create a scheduled multi-account and multi-region Automation patching operation.
+Parameters:
+  ArtifactBucket:
+    Type: String
+    Description: Bucket name for artifact zip files
+  OrgID:
+    Description: Organization ID used for S3 bucket sharing
+    Type: String
+
+Resources:
+# Managed inventory resources
+  ManagedInstancesDataEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Key used to encrypt instance data
+      Enabled: True
+      EnableKeyRotation: True
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: AccountPolicy
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: kms:*
+          Resource: '*'
+        - Sid: Allow use of the key by Systems Manager
+          Effect: Allow
+          Principal:
+            Service: ssm.amazonaws.com
+          Action:
+            - kms:DescribeKey
+            - kms:Encrypt
+            - kms:Decrypt
+            - kms:ReEncrypt*
+            - kms:GenerateDataKey
+            - kms:GenerateDataKeyWithoutPlaintext
+          Resource: '*'
+        - Sid: Allow use of the key by service roles within the organization
+          Effect: Allow
+          Principal: "*"
+          Action:
+            - kms:Encrypt
+            - kms:GenerateDataKey  
+          Resource: '*'
+          Condition:
+            StringEquals:
+              aws:PrincipalOrgID: !Ref OrgID          
+
+  ManagedInstancesDataEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/ManagedInstancesDataEncryptionKey
+      TargetKeyId: !Ref ManagedInstancesDataEncryptionKey
+
+  ManagedInstancesDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'managed-instances-data-${AWS::Region}-${AWS::AccountId}'
+      AccessControl: BucketOwnerFullControl
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Ref ManagedInstancesDataEncryptionKey
+              SSEAlgorithm: aws:kms
+      LifecycleConfiguration: 
+        Rules:
+          - Id: ResourceSyncGlacierRule
+            Prefix: glacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+            ExpirationInDays: 365              
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ManagedInstancesDataBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ManagedInstancesDataBucket
+      PolicyDocument:
+        Statement:
+        - Sid: SSMBucketPermissionsCheck
+          Effect: Allow
+          Principal:
+            Service: ssm.amazonaws.com
+          Action: s3:GetBucketAcl
+          Resource: !GetAtt ManagedInstancesDataBucket.Arn
+        - Sid: SSMBucketDelivery
+          Effect: Allow
+          Principal:
+            Service: ssm.amazonaws.com
+          Action: s3:PutObject
+          Resource: !Sub arn:aws:s3:::${ManagedInstancesDataBucket}/*
+          Condition:
+            StringEquals:
+              s3:x-amz-server-side-encryption: aws:kms
+              s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt ManagedInstancesDataEncryptionKey.Arn
+        - Sid: SSMBucketDeliveryTagging
+          Effect: Allow
+          Principal:
+            Service: ssm.amazonaws.com
+          Action: s3:PutObjectTagging
+          Resource: !Sub arn:aws:s3:::${ManagedInstancesDataBucket}/*/accountid=*/*
+        - Sid: SSMWrite
+          Effect: Allow
+          Principal: "*"
+          Action: s3:PutObject
+          Resource: !Sub arn:aws:s3:::${ManagedInstancesDataBucket}/*
+          Condition:
+            StringEquals:
+              aws:PrincipalOrgID: !Ref OrgID          
+
+# Patching resources
+  PatchingExecutionLogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'patching-execution-logs-${AWS::Region}-${AWS::AccountId}'
+      AccessControl: BucketOwnerFullControl
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration: 
+        Rules:
+          - Id: ExecutionGlacierRule
+            Prefix: glacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+            ExpirationInDays: 365              
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+          
+  PatchingExecutionLogsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PatchingExecutionLogsBucket
+      PolicyDocument:
+        Statement:
+        - Sid: SSMWrite
+          Effect: Allow
+          Principal: "*"
+          Action: 
+            - s3:PutObject
+            - s3:PutObjectAcl
+          Resource: 
+            - !Join [ '', [!GetAtt PatchingExecutionLogsBucket.Arn, '/*'] ]
+          Condition:
+            StringEquals:
+              aws:PrincipalOrgID: !Ref OrgID
+
+  PatchingWindowProduct:
+    Type: AWS::ServiceCatalog::CloudFormationProduct
+    Properties:
+      Owner: AWS
+      ProvisioningArtifactParameters:
+        - Info:
+            LoadTemplateFromURL: !Sub
+              - 'https://${bucket}.s3.amazonaws.com/patching_window.template'
+              - bucket: !Ref ArtifactBucket
+          Name: 'v1'
+      Name: Patching maintenance window product
+
+  PatchingPortfolio:
+    Type: AWS::ServiceCatalog::Portfolio
+    Properties:
+      DisplayName: Patching portfolio
+      ProviderName: AWS
+
+  AssociatePatchingproduct:
+    Type: AWS::ServiceCatalog::PortfolioProductAssociation
+    Properties:
+      PortfolioId: !Ref PatchingPortfolio
+      ProductId: !Ref PatchingWindowProduct
+
+# Emergency patching
+  EmergencyPatchingFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EmergencyPatchingFunctionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action: sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: OrgActions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - organizations:ListRoots
+                  - organizations:ListAccounts
+                Resource: "*"
+        - PolicyName: AssumeRole
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sts:AssumeRole
+                Resource: !Sub arn:aws:iam::*:role/EmergencyPatchingRole
+
+  EmergencyPatchingFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket:
+          Ref: ArtifactBucket
+        S3Key: emergency_patching.zip
+      FunctionName: emergency_patching
+      Environment:
+        Variables:
+          TASK_LAMBDA_NAME: maintenance_window_task
+          ASG_TASK_LAMBDA_NAME: maintenance_window_asg_task
+          DEPLOYMENT_REGION: !Ref AWS::Region
+          CHILD_ACCOUNT_ROLE: EmergencyPatchingRole
+      Handler: emergency_patching.lambda_handler
+      Role: !GetAtt EmergencyPatchingFunctionRole.Arn
+      Timeout: 60
+      MemorySize: 128
+      Runtime: python3.8
+
+  EmergencyPatchingStateMachineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EmergencyPatchingStateMachineRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - states.amazonaws.com
+          Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: InvokeFunction
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - lambda:InvokeFunction
+              Resource: 
+                - !GetAtt EmergencyPatchingFunction.Arn 
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              Resource: "*"                
+
+  EmergencyPatchingStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: EmergencyPatchingStateMachine
+      DefinitionString: 
+        !Sub
+          - |-
+            {
+              "StartAt": "Invoke Emergency Lambda",
+              "States": {
+                "Invoke Emergency Lambda": {
+                  "Type": "Task",
+                  "Resource": "${emergency_lambda}",
+                  "End": true
+                }
+              }
+            }
+          - emergency_lambda: !GetAtt EmergencyPatchingFunction.Arn
+      RoleArn: !GetAtt EmergencyPatchingStateMachineRole.Arn
+
+  PatchBaselineOverrideBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'patch-baseline-override-${AWS::Region}-${AWS::AccountId}'
+      AccessControl: BucketOwnerFullControl
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration: 
+        Rules:
+          - Id: InventoryGlacierRule
+            Prefix: glacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+            ExpirationInDays: 365              
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  PatchBaselineOverrideBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PatchBaselineOverrideBucket
+      PolicyDocument:
+        Statement:
+        - Sid: OrgRead
+          Effect: Allow
+          Principal: "*"
+          Action: s3:GetObject
+          Resource: !Sub arn:aws:s3:::${PatchBaselineOverrideBucket}/*
+          Condition:
+            StringEquals:
+              aws:PrincipalOrgID: !Ref OrgID      
+
+# Reporting resources
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: managed_instances_database
+        Description: Database used for patch reporting
+  
+  GlueCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      DatabaseName: !Ref GlueDatabase
+      Description: Crawler for managed instances data
+      Name: Managed-Instances-GlueCrawler
+      Role: !GetAtt GlueCrawlerRole.Arn
+      Schedule: 
+        ScheduleExpression: 'cron(0 8 * * ? *)'
+      Targets: 
+        S3Targets: 
+          - Path: !Ref ManagedInstancesDataBucket
+            Exclusions:
+              - AWS:InstanceInformation/accountid=*/test.json
+  
+  GlueCrawlerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: Managed-Instances-GlueCrawlerRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - glue.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      Path: "/service-role/"
+      Description: Role created for Glue to access managed instances data S3 bucket
+      Policies:
+        - PolicyName: S3Actions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub ${ManagedInstancesDataBucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                Resource: !GetAtt ManagedInstancesDataEncryptionKey.Arn
+
+# Athena resources
+  AthenaQueryResultsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub athena-query-results-${AWS::Region}-${AWS::AccountId}
+      AccessControl: BucketOwnerFullControl
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              KMSMasterKeyID: !Ref ManagedInstancesDataEncryptionKey
+              SSEAlgorithm: aws:kms
+      LifecycleConfiguration: 
+        Rules:
+          - Id: AthenaGlacierRule
+            Prefix: glacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+            ExpirationInDays: 365              
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  AthenaQueryNonCompliantPatch:
+    Type: AWS::Athena::NamedQuery
+    Properties: 
+      Database: !Join [ '-', [!Ref ManagedInstancesDataBucket, 'database'] ]
+      Description: Example query to list managed instances that are non-compliant for patching.
+      Name: QueryNonCompliantPatch
+      QueryString: |
+        SELECT 
+          * 
+        FROM 
+          aws_complianceitem 
+        WHERE 
+          status='NON_COMPLIANT' AND compliancetype='Patch' 
+        LIMIT 20
+
+  AthenaQueryInstanceList:
+    Type: AWS::Athena::NamedQuery
+    Properties: 
+      Database: !Join [ '-', [!Ref ManagedInstancesDataBucket, 'database'] ]
+      Description: Example query to return a list of non-terminated instances.
+      Name: QueryInstanceList
+      QueryString: |
+        SELECT 
+          * 
+        FROM 
+          aws_instanceinformation 
+        WHERE 
+          instancestatus IS NULL;
+
+Outputs:
+  PatchingTemplateStackAccountId:
+    Description: 'The account ID of the patching template.'    
+    Value: !Ref "AWS::AccountId"
+  PatchingExecutionLogsBucketName:
+    Description: The name of the S3 bucket used to store execution logs centrally.
+    Value: !Ref PatchingExecutionLogsBucket
+  ManagedInstancesDataBucketName:
+    Description: The name of the S3 bucket used to store resource data sync details.
+    Value: !Ref ManagedInstancesDataBucket
+  BaselineOverrideBucket:
+    Description: The ARN of the S3 bucket used to store patch baseline override list.
+    Value: !GetAtt PatchBaselineOverrideBucket.Arn
+  PatchingTemplateStackRegion:
+    Description: 'The region of the patching template.'
+    Value: !Ref "AWS::Region"
+  ManagedInstancesDataEncryptionKey:
+    Description: The ARN of the KMS key used to encrypt resource data sync logs.
+    Value: !GetAtt ManagedInstancesDataEncryptionKey.Arn

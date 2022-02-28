@@ -1,0 +1,1082 @@
+#  *
+#  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+#  * SPDX-License-Identifier: MIT-0
+#  *
+#  * Permission is hereby granted, free of charge, to any person obtaining a copy of this
+#  * software and associated documentation files (the "Software"), to deal in the Software
+#  * without restriction, including without limitation the rights to use, copy, modify,
+#  * merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+#  * permit persons to whom the Software is furnished to do so.
+#  *
+#  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+#  * INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+#  * PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+#  * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+#  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+#  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#  *
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS CloudFormation template to configure a target account for a scheduled multi-account and multi-region Automation patching operation.
+Parameters:
+  ArtifactBucket:
+    Type: String
+    Description: Bucket name for artifact files
+  PatchingTemplateStackAccountId:  
+    Type : 'String'
+    Description: 'The account ID of the patching template.'    
+  PatchingExecutionLogsBucketName:
+    Type : 'String'
+    Description: 'The name of the S3 bucket used to store execution logs centrally.'
+  ManagedInstancesDataBucketName:
+    Type : 'String'
+    Description: 'The name of the S3 bucket used to store resource data sync details'
+  PatchingTemplateStackRegion:
+    Type : 'String'
+    Description: 'The region of the patching template.'
+  ManagedInstancesDataEncryptionKey:
+    Type : 'String'
+    Description: 'The ARN of the KMS key used to encrypt resource data sync logs'
+  BaselineOverrideBucket:
+    Type : 'String'
+    Description: The ARN of the S3 bucket used to store patch baseline override list.
+
+Conditions:
+  CreateResources: !Equals [!Ref 'AWS::Region', !Ref PatchingTemplateStackRegion]
+
+Resources:
+# Requests layer
+  CrHelperLambdaLayer:
+    Condition: CreateResources
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - python3.8
+      Content:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: "crhelper.zip"
+      Description: Lambda Layer for crHelper module
+      LayerName: CrHelperLambdaLayer
+
+# Reporting resources
+  InventoryAssociation:
+    Type: AWS::SSM::Association
+    Properties:
+      AssociationName: Inventory-Association
+      Name: AWS-GatherSoftwareInventory
+      ScheduleExpression: "cron(0 6 * * ? *)"
+      OutputLocation:
+        S3Location: 
+          OutputS3BucketName: !Ref PatchingExecutionLogsBucketName
+          OutputS3KeyPrefix: !Join [ '', ['inventory-execution-logs/', 'accountid=', !Ref 'AWS::AccountId', '/', 'region=', !Ref 'AWS::Region'] ]
+      Targets:
+      - Key: InstanceIds
+        Values:
+        - "*"
+      Parameters: 
+        applications: 
+          - "Enabled"
+        awsComponents: 
+          - "Enabled"
+        files:
+          - ""
+        networkConfig: 
+          - "Enabled"
+        windowsUpdates: 
+          - "Enabled"
+        instanceDetailedInformation: 
+          - "Enabled"
+        services: 
+          - "Enabled"
+        windowsRegistry:
+          - ""
+        windowsRoles: 
+          - "Enabled"
+        customInventory:
+          - "Enabled"
+        billingInfo: 
+          - "Enabled"
+          
+  ResourceDataSync:
+    Type: AWS::SSM::ResourceDataSync
+    Properties: 
+      SyncName: 'InventoryData'
+      S3Destination:
+        BucketName: !Ref ManagedInstancesDataBucketName
+        BucketRegion: !Ref PatchingTemplateStackRegion
+        KMSKeyArn: !Ref ManagedInstancesDataEncryptionKey
+        SyncFormat: 'JsonSerDe'
+
+## Service catalog lambdas
+# Maintenance window role
+  MaintenanceWindowRole:
+    Condition: CreateResources
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MaintenanceWindowRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ssm.amazonaws.com
+          Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: InvokeFunction
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - lambda:InvokeFunction
+              Resource: 
+                - !GetAtt MaintenanceWindowTaskFunction.Arn 
+                - !GetAtt MaintenanceWindowASGTaskFunction.Arn 
+
+# Maintenance window creation lambda
+  MaintenanceWindowCreationLambdaRole:
+    Condition: CreateResources
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MaintenanceWindowCreationLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action: sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AllowMW
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - ssm:*MaintenanceWindow*
+              Resource: '*'
+        - PolicyName: AllowPassRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - iam:PassRole
+              Resource: !GetAtt MaintenanceWindowRole.Arn
+
+  MaintenanceWindowCreationFunction:
+    Condition: CreateResources
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: "maintenance_window_creation.zip"
+      FunctionName: MaintenanceWindowCreationFunction
+      Handler: maintenance_window_creation.lambda_handler
+      Environment:
+        Variables:
+          MW_TASK_LAMBDA_ARN: !GetAtt MaintenanceWindowTaskFunction.Arn
+          MW_ASG_TASK_LAMBDA_ARN: !GetAtt MaintenanceWindowASGTaskFunction.Arn
+          SERVICE_ROLE_ARN: !GetAtt MaintenanceWindowRole.Arn
+      Role: !GetAtt MaintenanceWindowCreationLambdaRole.Arn
+      Layers:
+        - !Ref CrHelperLambdaLayer      
+      Timeout: 60
+      MemorySize: 128
+      Runtime: python3.8
+
+# EC2 tagging lambda
+  MaintenanceWindowTaggingLambdaRole:
+    Condition: CreateResources
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: MaintenanceWindowTaggingLambdaRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action: sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AllowTag
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - ec2:CreateTags
+              - ssm:GetParameter
+              - autoscaling:CreateOrUpdateTags
+              - autoscaling:DeleteTags
+              Resource: '*'
+
+  MaintenanceWindowTaggingFunction:
+    Condition: CreateResources
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: "maintenance_window_tagging.zip"
+      FunctionName: MaintenanceWindowTaggingFunction
+      Handler: maintenance_window_tagging.lambda_handler
+      Role: !GetAtt MaintenanceWindowTaggingLambdaRole.Arn
+      Layers:
+        - !Ref CrHelperLambdaLayer 
+      Timeout: 360
+      MemorySize: 128
+      Runtime: python3.8
+
+## Maintenance window task lambdas
+  TaskLambdasRole:
+    Condition: CreateResources
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: TaskLambdasRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ssm.amazonaws.com
+            - lambda.amazonaws.com
+          Action: sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+        - arn:aws:iam::aws:policy/AutoScalingFullAccess
+      Policies:
+        - PolicyName: SSMDocInvoke
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - ssm:StartAutomationExecution
+              Resource:
+                - Fn::Sub: 
+                  - arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:automation-definition/${StandaloneEC2PatchDocument}:$DEFAULT
+                  - {StandaloneEC2PatchDocument: !Ref StandaloneEC2PatchDocument}
+                - Fn::Sub: 
+                  - arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:automation-definition/${ASGEC2PatchDocument}:$DEFAULT
+                  - {ASGEC2PatchDocument: !Ref ASGEC2PatchDocument}
+        - PolicyName: PassSSMRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action: iam:PassRole
+              Resource: !GetAtt AutomationAdministrationServiceRole.Arn
+              Effect: Allow
+        - PolicyName: LogsCreation
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action: logs:CreateLogGroup
+              Resource:
+                Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*
+              Effect: Allow
+            - Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              Resource:
+                Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/MaintenanceWindowTaskFunction:*
+                Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/MaintenanceWindowASGTaskFunction:*
+              Effect: Allow
+        - PolicyName: UpdateCreateSGs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action: 
+              - ec2:CreateSecurityGroup
+              - ec2:AuthorizeSecurityGroupEgress
+              Resource: '*'
+              Effect: Allow
+        - PolicyName: GetSSMParameter
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - ssm:GetParameter
+              Resource: '*'                    
+
+# Standalone EC2 task lambda
+  MaintenanceWindowTaskFunction:
+    Condition: CreateResources
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: maintenance_window_task.zip
+      FunctionName: MaintenanceWindowTaskFunction
+      Handler: maintenance_window_task.lambda_handler
+      Environment:
+        Variables:
+          ADMINISTRATION_ROLE_NAME: !Ref AutomationAdministrationServiceRole
+          EXECUTION_ROLE_NAME: !Ref AutomationExecutionServiceRole
+          DOCUMENT_NAME: !Ref StandaloneEC2PatchDocument
+      Role: !GetAtt TaskLambdasRole.Arn
+      Timeout: 900
+      MemorySize: 128
+      Runtime: python3.8
+
+# ASG EC2 task lambda
+  MaintenanceWindowASGTaskFunction:
+    Condition: CreateResources
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: maintenance_window_asg_task.zip
+      FunctionName: MaintenanceWindowASGTaskFunction
+      Handler: maintenance_window_asg_task.lambda_handler
+      Environment:
+        Variables:
+          ASG_UPDATE_LAMBDA_NAME: !Ref UpdateASGFunction 
+          ASG_EXECUTION_ROLE_NAME: !Ref AutomationAdministrationServiceRole
+          ASG_DOCUMENT_NAME: !Ref ASGEC2PatchDocument
+          PROFILE_ROLE_NAME: !Ref ASGInstanceProfile
+          ADMINISTRATION_ROLE_NAME: !Ref AutomationAdministrationServiceRole
+          EXECUTION_ROLE_NAME: !Ref AutomationExecutionServiceRole
+          DOCUMENT_NAME: !Ref StandaloneEC2PatchDocument
+          PATCHING_TEMPLATE_REGION: !Ref PatchingTemplateStackRegion          
+      Role: !GetAtt TaskLambdasRole.Arn
+      Timeout: 900
+      MemorySize: 128
+      Runtime: python3.8
+
+# Emergency patching role
+  MaintenanceWindowRole:
+    Condition: CreateResources
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EmergencyPatchingRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            AWS: 
+            - !Join [ '', ['arn:aws:iam::', !Ref PatchingTemplateStackAccountId, ':root'] ]            
+          Action: sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: InvokeFunction
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - lambda:InvokeFunction
+              Resource: 
+                - !GetAtt MaintenanceWindowTaskFunction.Arn 
+                - !GetAtt MaintenanceWindowASGTaskFunction.Arn 
+
+## SSM documents resources
+# SSM execution roles
+  AutomationExecutionServiceRole:
+    Condition: CreateResources
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ssm.amazonaws.com
+            - ec2.amazonaws.com
+            AWS: 
+            - !Join [ '', ['arn:aws:iam::', !Ref PatchingTemplateStackAccountId, ':root'] ]
+            - !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AmazonSSMAutomationRole
+      Path: "/"
+      RoleName: AutomationExecutionRole
+      Policies:
+        - PolicyName: passRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - iam:PassRole
+              Resource: 
+              - !Join [ '', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':role/SystemsManager-AutomationExecutionRole'] ]
+              - !Join [ '', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':role/service_instance'] ]
+        - PolicyName: getTagPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - tag:GetResources
+              Resource: "*"
+        - PolicyName: listResourceGroupResourcesPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - resource-groups:listGroupResources
+              Resource: "*"
+        - PolicyName: invokeASGupdateLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - lambda:InvokeFunction
+              Resource: 
+                - !Join [ '', ['arn:aws:lambda:*:', !Ref 'AWS::AccountId', ':function:UpdateASGFunction'] ]
+        - PolicyName: describeInstanceRefresh
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - ec2:DescribeInstanceRefreshes
+              - autoscaling:DescribeInstanceRefreshes
+              Resource: "*"
+        - PolicyName: S3Actions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub ${BaselineOverrideBucket}/*
+                                
+  AutomationAdministrationServiceRole:
+    Condition: CreateResources
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AutomationAdministrationRolePatching
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: ssm.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      Policies:
+        - PolicyName: AssumeRole
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+                - sts:AssumeRole
+              Resource: !GetAtt AutomationExecutionServiceRole.Arn
+            - Effect: Allow
+              Action:
+                - organizations:ListAccountsForParent
+              Resource:
+                - "*"
+        - PolicyName: S3Actions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub ${BaselineOverrideBucket}/*
+
+  ASGInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action: sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Path: "/"
+      Policies:
+      - PolicyName: CentralAccountS3Permissions
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:PutObjectAcl
+            Resource: 
+              - !Join [ '', ['arn:aws:s3:::', !Ref 'PatchingExecutionLogsBucketName'] ]
+              - !Join [ '', ['arn:aws:s3:::', !Ref 'PatchingExecutionLogsBucketName', '/*'] ]
+
+  ASGInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - !Ref ASGInstanceRole
+      InstanceProfileName: ASGInstanceProfile 
+
+# Standalone EC2 SSM patching document
+  StandaloneEC2PatchDocument:
+    Condition: CreateResources
+    Type: AWS::SSM::Document
+    Properties: 
+      DocumentType: Automation
+      Content:
+        description: >-
+          **Description**
+          
+          This document runs the Command document ```AWS-RunPatchBaseline``` on the specified instances.
+        schemaVersion: '0.3'
+        assumeRole: '{{ AutomationAssumeRole }}'
+        parameters:
+          AutomationAssumeRole: 
+            type: String
+            description: The ARN of the Automation service role to assume.
+          Operation:
+            type: String
+            default: Scan
+            description: >-
+              (Required) The update or configuration to perform on the instance. The
+              system checks if patches specified in the patch baseline are installed on
+              the instance. The install operation installs patches missing from the
+              baseline.
+          RebootOption:
+            type: String
+            default: RebootIfNeeded
+            description: >-
+              (Optional) Reboot behavior after a patch Install operation. If you choose
+              NoReboot and patches are installed, the instance is marked as non-compliant 
+              until a subsequent reboot and scan.
+          InstallOverrideList:
+            type: String
+            default: ""
+            description: >-
+              (Optional) An https URL or an Amazon S3 path-style URL to the list of patches to be installed. This patch installation list overrides the patches specified by the default patch baseline.
+          SnapshotId:
+            type: String
+            default: ""
+            description: >-
+              (Optional) The snapshot ID to use to retrieve a patch baseline snapshot.
+          MaximumConcurrency:
+            type: String
+            default: 10%
+            description: >-
+              (Optional) Specify the number or percentage of targets on which to execute the task at the same time. You can specify a number, such as 10, or a percentage, such as 10%. The default value is 10%.    
+          MaximumErrors:
+            type: String
+            default: 10%
+            description: >-
+              (Optional) The number of errors that are allowed before the system stops initiating the automation on additional targets. You can specify either an absolute number of errors, for example 10, or a percentage of the target set, for example 10%. The default value is 10%.
+          ResourceGroupKey:
+            type: String
+            description: >-
+              Enter a resource group that includes the resources you want to target. Important: The Resource Group name is case sensitive.
+            default: 'tag:maintenance_window'
+          ResourceGroupName:
+            type: String
+            description: >-
+              Enter a resource group that includes the resources you want to target. Important: The Resource Group name is case sensitive.
+            default: Default_maintenance_window
+        mainSteps:
+          - name: runPatchBaseline
+            action: 'aws:runCommand'
+            timeoutSeconds: 7200
+            onFailure: Abort
+            inputs:
+              DocumentName: AWS-RunPatchBaseline
+              Targets:
+              - Key: '{{ ResourceGroupKey }}'
+                Values:
+                  - '{{ ResourceGroupName }}'
+              Parameters:
+                Operation: '{{ Operation }}'
+                RebootOption: '{{ RebootOption }}'
+                InstallOverrideList: '{{ InstallOverrideList }}'
+                SnapshotId: '{{ SnapshotId }}'
+              OutputS3BucketName: !Ref PatchingExecutionLogsBucketName
+              OutputS3KeyPrefix: 'patching/accountid={{global:ACCOUNT_ID}}/region={{global:REGION}}/executionid={{automation:EXECUTION_ID}}'
+              MaxConcurrency: '{{ MaximumConcurrency }}'
+              MaxErrors: '{{ MaximumErrors }}'
+            description: >-
+              This command runs the Command document ```AWS-RunPatchBaseline``` on the
+              specified instances.
+
+# ASG EC2 SSM patching document
+  ASGEC2PatchDocument:
+    Condition: CreateResources 
+    Type: AWS::SSM::Document
+    Properties: 
+      DocumentType: Automation
+      Content:
+        description: Systems Manager Automation Demo - Patch AMI and Update ASG
+        schemaVersion: '0.3'
+        assumeRole: '{{ automationAssumeRole }}'
+        outputs:
+          - createImage.ImageId
+        parameters:
+          subnetId:
+            description: The SubnetId where the instance is launched from the sourceAMIid.
+            type: String
+          instancesEnvironmentTag:
+            description: if to refresh instances whith bew launch config.
+            type: String
+          sourceAMIid:
+            description: AMI to patch
+            type: String
+          targetASG:
+            description: Auto Scaling group to Update
+            type: String
+          retainHealthyPercentage:
+            description: instances healthy percentage retaintion.
+            type: String
+          securitygroupId:
+            description: security group for the intermediate instance
+            type: StringList
+          updateASGLambdaName:
+            description: The name of the update ASG function.
+            type: String
+          targetAMIname:
+            default: 'patchedAMI-{{global:DATE_TIME}}'
+            description: Name of new AMI
+            type: String
+          installOverrideList:
+            default: ''
+            description: (Optional) An https URL or an Amazon S3 path-style URL to the list of patches to be installed. This patch installation list overrides the patches specified by the default patch baseline.
+            type: String
+          instanceProfileRoleName:
+            description: The name of the instance profile role to assume.
+            type: String
+          automationAssumeRole:
+            description: The ARN of the Automation service role to assume.
+            type: String
+          refreshASGInstances:
+            description: if to refresh instances whith bew launch config.
+            type: String
+        mainSteps:
+          - maxAttempts: 1
+            inputs:
+              IamInstanceProfileName: '{{ instanceProfileRoleName }}'
+              MaxInstanceCount: 1
+              TagSpecifications:
+                - ResourceType: instance
+                  Tags:
+                    - Value: '{{ instancesEnvironmentTag }}'
+                      Key: Patch Group
+              ImageId: '{{ sourceAMIid }}'
+              SubnetId: '{{ subnetId }}'
+              InstanceType: m3.large
+              SecurityGroupIds: '{{ securitygroupId }}'
+              MinInstanceCount: 1
+            name: startInstances
+            action: 'aws:runInstances'
+            timeoutSeconds: 1200
+            onFailure: Abort
+          - maxAttempts: 1
+            inputs:
+              Parameters:
+                InstallOverrideList: '{{ installOverrideList }}'
+                Operation: Install
+              InstanceIds:
+                - '{{ startInstances.InstanceIds }}'
+              DocumentName: AWS-RunPatchBaseline
+            name: runPatchBaseline
+            action: 'aws:runCommand'
+            onFailure: Abort
+          - maxAttempts: 1
+            inputs:
+              DesiredState: stopped
+              InstanceIds:
+                - '{{ startInstances.InstanceIds }}'
+            name: stopInstance
+            action: 'aws:changeInstanceState'
+            onFailure: Abort
+          - maxAttempts: 1
+            inputs:
+              ImageName: '{{ targetAMIname }}'
+              InstanceId: '{{ startInstances.InstanceIds }}'
+              ImageDescription: AMI created by EC2 Automation
+              NoReboot: true
+            name: createImage
+            action: 'aws:createImage'
+            onFailure: Abort
+          - maxAttempts: 1
+            inputs:
+              DesiredState: terminated
+              InstanceIds:
+                - '{{ startInstances.InstanceIds }}'
+            name: terminateInstance
+            action: 'aws:changeInstanceState'
+            onFailure: Abort
+          - maxAttempts: 1
+            inputs:
+              FunctionName: '{{ updateASGLambdaName }}'
+              Payload: '{"targetASG":"{{targetASG}}", "newAmiID":"{{createImage.ImageId}}", "retainHealthyPercentage":"{{retainHealthyPercentage}}", "refreshASGInstances":"{{refreshASGInstances}}" }'
+            name: updateASG
+            action: 'aws:invokeLambdaFunction'
+            timeoutSeconds: 1200
+            onFailure: Abort
+            nextStep: StepSelection
+          - maxAttempts: 1
+            inputs:
+              Choices:
+                - NextStep: waitForRefreshAction
+                  Variable: '{{refreshASGInstances}}'
+                  EqualsIgnoreCase: 'Yes'
+            name: StepSelection
+            action: 'aws:branch'
+            timeoutSeconds: 600
+            onFailure: Abort
+            isEnd: true
+          - inputs:
+              PropertySelector: '$.InstanceRefreshes[0].Status'
+              DesiredValues:
+                - Successful
+              AutoScalingGroupName: '{{ targetASG }}'
+              Service: autoscaling
+              Api: DescribeInstanceRefreshes
+            name: waitForRefreshAction
+            action: 'aws:waitForAwsResourceProperty'
+            timeoutSeconds: 2000
+            onFailure: Continue
+            nextStep: scan
+          - maxAttempts: 1
+            inputs:
+              Parameters:
+                InstallOverrideList: '{{ installOverrideList }}'
+                Operation: Scan
+              Targets:
+                - Values:
+                    - '{{ targetASG }}'
+                  Key: 'tag:aws:autoscaling:groupName'
+              DocumentName: AWS-RunPatchBaseline
+            name: scan
+            action: 'aws:runCommand'
+            onFailure: Continue
+
+# Update ASG lambda
+  ASGUpdateLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ASGUpdateLambdaRole-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ssm.amazonaws.com
+            - lambda.amazonaws.com
+          Action: sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AutoScalingFullAccess
+        - arn:aws:iam::aws:policy/AWSLambdaExecute
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+
+  UpdateASGFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: update_asg.zip
+      FunctionName: UpdateASGFunction
+      Handler: update_asg.lambda_handler
+      Role: !GetAtt ASGUpdateLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 128
+      Runtime: python3.8
+
+## Config rule resources
+# Patch tag monitoring config rule 
+  PatchTagMonitoringConfigRule:
+    Type: 'AWS::Config::ConfigRule'
+    Properties:
+      ConfigRuleName: patch_tags
+      Description: >-
+        Checks whether your resources have the tags that you specify.
+      InputParameters:
+        tag1Key: maintenance_window
+        tag1Value: Dev_maintenance_window,Test_maintenance_window,Prod_maintenance_window,Default_maintenance_window
+        tag2Key: Patch Group
+        tag2Value: Dev,Test,Prod,Default
+      Scope:
+        ComplianceResourceTypes:
+          - 'AWS::EC2::Instance'
+          - 'AWS::AutoScaling::AutoScalingGroup'
+      Source:
+        Owner: AWS
+        SourceIdentifier: REQUIRED_TAGS
+    
+# Event bridge rule for invoking Lambda
+  EC2TagMonitoringEventRule:
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: "If tag is not attached to perticular Ec2 Instnace or ASG then EventRule will invoke lambda to attached specific tags"
+      EventPattern:
+          {
+                "detail-type": ["Config Rules Compliance Change"],
+                "source": ["aws.config"],
+                "detail": {
+                  "configRuleName": ["patch_tags"],
+                  "messageType": ["ComplianceChangeNotification"]
+                }
+              }
+      State: "ENABLED"
+      Targets: 
+        - Arn:  
+              Fn::GetAtt:
+                - "PatchTagMonitoringFunction"
+                - "Arn"
+          Id: "TargetFunctionV1"
+
+  PermissionForEventsToInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: !Ref PatchTagMonitoringFunction  
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        Fn::GetAtt: 
+          - "EC2TagMonitoringEventRule"
+          - "Arn"
+      
+# Tag monitoring function
+  PatchTagMonitoringFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub PatchTagMonitoringFunctionRole-${AWS::Region}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+            - ssm.amazonaws.com
+          Action: sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AllowTag
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - ec2:CreateTags
+              - ssm:GetParameter
+              - autoscaling:CreateOrUpdateTags
+              - autoscaling:DeleteTags
+              Resource: '*'
+        - PolicyName: AllowMW
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - ssm:*MaintenanceWindow*
+              Resource: '*'              
+
+  PatchTagMonitoringFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        S3Bucket: !Ref ArtifactBucket
+        S3Key: patch_tag_monitoring.zip
+      FunctionName: PatchTagMonitoringFunction
+      Environment:
+        Variables:
+          PATCHING_TEMPLATE_REGION: !Ref PatchingTemplateStackRegion
+      Handler: patch_tag_monitoring.lambda_handler
+      Role: !GetAtt PatchTagMonitoringFunctionRole.Arn
+      Timeout: 60
+      MemorySize: 128
+      Runtime: python3.8
+
+
+## Default maintenance window resources
+# Default maintenance window
+  DefaultMaintenanceWindow:
+    Condition: CreateResources    
+    Type: AWS::SSM::MaintenanceWindow
+    Properties: 
+      AllowUnassociatedTargets: true
+      Cutoff: 1
+      Description: 'Default Maintenance Window'
+      Duration: 6
+      Name: Default_maintenance_window
+      Schedule: "cron(0 0 5 ? * FRI *)"
+
+# Default maintenance window standalone EC2 task
+  DefaultMaintenanceWindowTask:        
+    Condition: CreateResources
+    Type: AWS::SSM::MaintenanceWindowTask
+    Properties: 
+      Priority: 1
+      ServiceRoleArn: !GetAtt MaintenanceWindowRole.Arn
+      TaskArn: !GetAtt MaintenanceWindowTaskFunction.Arn
+      TaskInvocationParameters: 
+        MaintenanceWindowLambdaParameters:
+          Payload: 
+            Fn::Base64: |
+              {
+                "env": "Default",
+                "patching_operation": "Install",
+                "operation_post_patching": "RebootIfNeeded",
+                "run_patch_baseline_install_override_list": ""                            
+              }
+      TaskType: LAMBDA
+      WindowId: !Ref DefaultMaintenanceWindow
+
+# Default maintenance window ASG EC2 task
+  DefaultMaintenanceWindowASGTask:     
+    Condition: CreateResources
+    Type: AWS::SSM::MaintenanceWindowTask
+    Properties: 
+      Priority: 1
+      ServiceRoleArn: !GetAtt MaintenanceWindowRole.Arn
+      TaskArn: !GetAtt MaintenanceWindowASGTaskFunction.Arn
+      TaskInvocationParameters: 
+        MaintenanceWindowLambdaParameters:
+          Payload:
+            Fn::Base64: |
+              {
+                "env": "Default",
+                "retain_healthy_percentage": 10,
+                "refresh_asg_instances": "Yes",
+                "patching_operation": "Install",
+                "run_patch_baseline_install_override_list": ""                            
+              }
+      TaskType: LAMBDA
+      WindowId: !Ref DefaultMaintenanceWindow
+
+## Patching baseline setting
+  WindowsPatchBaseline:
+    Type: AWS::SSM::PatchBaseline
+    Properties:
+      Name: WindowsOS
+      Description: Baseline containing all updates approved for Windows Dev instances
+      OperatingSystem: WINDOWS
+      PatchGroups:
+      - Dev
+      - Test
+      - Prod
+      - Default
+      ApprovalRules:
+        PatchRules:
+        - PatchFilterGroup:
+            PatchFilters:
+            - Values:
+              - Critical
+              - Important
+              Key: MSRC_SEVERITY
+            - Values:
+              - SecurityUpdates
+              - CriticalUpdates
+              Key: CLASSIFICATION
+            - Values:
+              - WindowsServer2012
+              - WindowsServer2012R2
+              - WindowsServer2016
+              - WindowsServer2019
+              Key: PRODUCT
+          ApproveAfterDays: 7
+          ComplianceLevel: CRITICAL
+
+  LinuxOSBaseline:
+    Type: AWS::SSM::PatchBaseline
+    Properties:
+      Name: LinuxOS
+      Description: Baseline containing all updates approved for amazonLinux instances
+      OperatingSystem: AMAZON_LINUX_2
+      PatchGroups:
+      - Dev
+      - Test
+      - Prod
+      - Default
+      ApprovalRules:
+        PatchRules:
+        - PatchFilterGroup:
+            PatchFilters:
+            - Values:
+              - Critical
+              - Important
+              Key: SEVERITY
+            - Values:
+              - Bugfix
+              - Security
+              Key: CLASSIFICATION
+          ApproveAfterDays: 7
+          ComplianceLevel: CRITICAL
+
+  RedHatLinuxOSBaseline:
+    Type: AWS::SSM::PatchBaseline
+    Properties:
+      Name: RedHatLinuxOS
+      Description: Baseline containing all updates approved for amazonLinux instances
+      OperatingSystem: REDHAT_ENTERPRISE_LINUX
+      PatchGroups:
+      - Dev
+      - Test
+      - Prod
+      - Default
+      ApprovalRules:
+        PatchRules:
+        - PatchFilterGroup:
+            PatchFilters:
+            - Values:
+              - Critical
+              - Important
+              Key: SEVERITY
+            - Values:
+              - Bugfix
+              - Security
+              Key: CLASSIFICATION
+          ApproveAfterDays: 7
+          ComplianceLevel: CRITICAL
+
+  UbuntuOSBaseline:
+    Type: AWS::SSM::PatchBaseline
+    Properties:
+      Name: UbuntuOS
+      Description: Baseline containing all updates approved for amazonLinux instances
+      OperatingSystem: UBUNTU
+      PatchGroups:
+      - Dev
+      - Test
+      - Prod
+      - Default
+      ApprovalRules:
+        PatchRules:
+        - PatchFilterGroup:
+            PatchFilters:
+            - Values:
+              - Required
+              - Important
+              - Standard
+              Key: PRIORITY
+            - Values:
+              - All
+              Key: SECTION
+          ApproveAfterDays: 7
+          ComplianceLevel: CRITICAL
