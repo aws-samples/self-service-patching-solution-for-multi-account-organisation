@@ -416,6 +416,7 @@ Resources:
               - iam:PassRole
               Resource: 
               - !Join [ '', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':role/SystemsManager-AutomationExecutionRole'] ]
+              - !Join [ '', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':role/AutomationExecutionRole'] ]
               - !Join [ '', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':role/service_instance'] ]
         - PolicyName: getTagPermissions
           PolicyDocument:
