@@ -21,7 +21,6 @@ class TagInstances(object):
     # Class: TagInstances
     # Description: Tagging instances in the child account
     """
-
     def __init__(self, event, context):
         self.event = event
         self.context = context
@@ -63,8 +62,7 @@ class TagInstances(object):
             print(str(exception))
             raise Exception(str(exception))
 
-    def build_instance_list(self, instance_tags):
-        
+    def build_instance_list(self, instance_tags): 
         instance_tag_env = []
         instance_tag_asg = []
         instance_tag_patch = []
@@ -141,7 +139,6 @@ class TagInstances(object):
         except Exception as exp:
             print(str(exp))
 
-
     def get_asg_list(self,target_asg):      
         try:
             response = self.as_client.describe_auto_scaling_groups(AutoScalingGroupNames=[target_asg])
@@ -170,7 +167,6 @@ class TagInstances(object):
 
         except Exception as exp:  
             print('No such ASG '+str(exp))
-
 
     def tag_asg_main(self,asg_name):
         try:
@@ -224,9 +220,6 @@ class TagInstances(object):
         except Exception as exp:
             print(str(exp))            
 
-
-
-
 def lambda_handler(event, context):
     tag_instances = TagInstances(event,context)
     resourceType = event['detail']['resourceType'].split("::")[1]
@@ -238,4 +231,3 @@ def lambda_handler(event, context):
         print("Given resourceType is AutoScaling ")
         asg_name = event['detail']['resourceId'].split("/")[1]
         tag_instances.tag_asg_main(asg_name)
-
