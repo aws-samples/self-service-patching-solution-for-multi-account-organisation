@@ -526,6 +526,7 @@ Resources:
               - !Join [ '', ['arn:aws:s3:::', !Ref 'PatchingExecutionLogsBucketName', '/*'] ]
 
   ASGInstanceProfile:
+    Condition: CreateResources
     Type: AWS::IAM::InstanceProfile
     Properties:
       Path: "/"
