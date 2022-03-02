@@ -466,7 +466,35 @@ Resources:
           aws_instanceinformation 
         WHERE 
           instancestatus IS NULL;
-
+  AthenaQueryManagedInstanceInventory:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Join [ '-', [!Ref ManagedInstancesDataBucket, 'database'] ]
+      Description: Query to extract Managed instance inventory across all the child accounts along with the compliance status and platform_install_patch tag information
+      Name: PathingInventory
+      QueryString: |
+        SELECT
+          aws_complianceitem.resourceid, aws_complianceitem.status, aws_complianceitem.compliancetype, aws_complianceitem.classification, aws_complianceitem.id, aws_complianceitem.patchstate, aws_complianceitem.accountid, aws_complianceitem.region, aws_complianceitem.installedtime, aws_complianceitem.capturetime, 
+          aws_instanceinformation.platformname, aws_instanceinformation.ipaddress, aws_instanceinformation.platformtype, aws_instanceinformation.instancestatus
+        FROM
+          aws_complianceitem
+        INNER JOIN aws_instanceinformation ON aws_instanceinformation.resourceid = aws_complianceitem.resourceid
+        WHERE compliancetype='Patch'
+ 
+  AthenaQueryQuickSightInventoryCompliance:
+    Type: AWS::Athena::NamedQuery
+    Properties:
+      Database: !Join [ '-', [!Ref ManagedInstancesDataBucket, 'database'] ]
+      Description: Query to extract compliance status for quicksight dashboard
+      Name: InventoryComplianceQuicksight
+      QueryString: |
+        CREATE OR REPLACE VIEW patch_table as
+        SELECT
+          aws_compliancesummary.resourceid, aws_compliancesummary.status, aws_compliancesummary.compliancetype,aws_compliancesummary.accountid, aws_compliancesummary.region,aws_instanceinformation.platformname, aws_instanceinformation.ipaddress, aws_instanceinformation.platformtype, aws_instanceinformation.instancestatus
+        FROM
+          aws_compliancesummary
+        INNER JOIN aws_instanceinformation ON aws_instanceinformation.resourceid = aws_compliancesummary.resourceid
+        WHERE compliancetype='Patch'
 Outputs:
   PatchingTemplateStackAccountId:
     Description: 'The account ID of the patching template.'    
