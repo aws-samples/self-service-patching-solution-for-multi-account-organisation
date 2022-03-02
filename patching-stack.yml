@@ -471,7 +471,7 @@ Resources:
     Properties:
       Database: !Join [ '-', [!Ref ManagedInstancesDataBucket, 'database'] ]
       Description: Query to extract Managed instance inventory across all the child accounts along with the compliance status and platform_install_patch tag information
-      Name: PathingInventory
+      Name: PatchComplianceReport
       QueryString: |
         SELECT
           aws_complianceitem.resourceid, aws_complianceitem.status, aws_complianceitem.compliancetype, aws_complianceitem.classification, aws_complianceitem.id, aws_complianceitem.patchstate, aws_complianceitem.accountid, aws_complianceitem.region, aws_complianceitem.installedtime, aws_complianceitem.capturetime, 
