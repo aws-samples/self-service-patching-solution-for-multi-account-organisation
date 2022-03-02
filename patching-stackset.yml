@@ -954,7 +954,7 @@ Resources:
       Environment:
         Variables:
           PATCHING_TEMPLATE_REGION: !Ref PatchingTemplateStackRegion
-      Handler: patch_tag_monitoring.lambda_handler
+      Handler: index.lambda_handler
       Role: !GetAtt PatchTagMonitoringFunctionRole.Arn
       Timeout: 60
       MemorySize: 128
