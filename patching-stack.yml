@@ -411,7 +411,108 @@ Resources:
                 Action:
                   - kms:Decrypt
                 Resource: !GetAtt ManagedInstancesDataEncryptionKey.Arn
+  DeleteGlueColumnRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: DeleteGlueColumnRole
+        AssumeRolePolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        Policies:
+          - PolicyName: GlueActions
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - glue:GetTable
+                    - glue:UpdateTable
+                  Resource:
+                    - !Sub arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog
+                    - !Sub arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/${GlueDatabase}
+                    - !Sub arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/${GlueDatabase}/aws_instanceinformation
 
+  DeleteGlueColumnFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: DeleteGlueColumnFunction
+      Runtime: python3.7
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Timeout: 600
+      Role: !GetAtt DeleteGlueColumnRole.Arn
+      Environment:
+        Variables:
+          CRAWLER_NAME: !Ref GlueCrawler
+          DATABASE_NAME: !Ref GlueDatabase
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          CRAWLER_NAME = os.environ['CRAWLER_NAME']
+          DATABASE_NAME = os.environ['DATABASE_NAME']
+          TABLE_NAME = 'aws_instanceinformation'
+          COLUMN_NAME = 'resourcetype'
+          glue_client = boto3.client('glue')
+          def lambda_handler(event, context):
+              event_crawler_name = event['detail']['crawlerName']
+              if event_crawler_name == CRAWLER_NAME:
+                  response = glue_client.get_table(
+                      CatalogId=context.invoked_function_arn.split(":")[4],
+                      DatabaseName=DATABASE_NAME,
+                      Name=TABLE_NAME
+                  )
+                  # Update the column name if the table exists.
+                  if response['Table']:
+                      table = response['Table']
+                      columns = table['StorageDescriptor']['Columns']
+                      # Remove the column.
+                      updated_columns = [i for i in columns if not (i['Name'] == COLUMN_NAME)]
+                      table['StorageDescriptor']['Columns'] = updated_columns
+                      table.pop('DatabaseName', None)
+                      table.pop('CreatedBy', None)
+                      table.pop('CreateTime', None)
+                      table.pop('UpdateTime', None)
+                      table.pop('IsRegisteredWithLakeFormation', None)
+                      table.pop('CatalogId', None)
+                      response = glue_client.update_table(
+                          CatalogId=context.invoked_function_arn.split(":")[4],
+                          DatabaseName=DATABASE_NAME,
+                          TableInput=table
+                      )
+  DeleteGlueColumnFunctionEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: DeleteGlueColumn
+      Description: Deletes resourcetype from Glue table
+      EventPattern:
+        source:
+          - aws.glue
+        detail-type:
+          - Glue Crawler State Change
+        detail:
+          state:
+            - Succeeded
+      Targets:
+        - Arn: !GetAtt DeleteGlueColumnFunction.Arn
+          Id: "TargetFunctionV1"
+
+  DeleteGlueColumnFunctionCloudWatchPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DeleteGlueColumnFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DeleteGlueColumnFunctionEventRule.Arn
 # Athena resources
   AthenaQueryResultsBucket:
     Type: AWS::S3::Bucket
