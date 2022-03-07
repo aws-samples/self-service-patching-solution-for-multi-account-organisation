@@ -31,6 +31,8 @@ class TagInstances(object):
         self.context = context
         self.exception = []
         try:
+            regions = os.environ["WORKLOAD_REGIONS"]
+            self.regions = regions.split(",")            
             resource_properties = self.event['ResourceProperties']
             self.env = resource_properties['Environment']
             self.supported_state_list = ['running'] #,'stopped','terminated']
@@ -45,9 +47,9 @@ class TagInstances(object):
             self.reason_data = "Missing required property %s" % exception
             LOGGER.error(self.reason_data)
             print("Failed in except block of __init__")
-        session = Session()
-        self.regions = session.get_available_regions('ec2')
-        print(self.regions)
+        # session = Session()
+        # self.regions = session.get_available_regions('ec2')
+        # print(self.regions)
 
     def get_instance_list(self):      
         try:

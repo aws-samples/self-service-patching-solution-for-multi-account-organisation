@@ -41,26 +41,15 @@ class TagInstances(object):
     def get_instance_list(self,instance_id):      
         try:
             response = self.ec2_client.describe_instances(InstanceIds=[instance_id])
-            image_id = response['Reservations'][0]['Instances'][0]['ImageId']
-            image_name = self.get_image_name([image_id])
             try:
                 tags = response['Reservations'][0]['Instances'][0]['Tags']
             except:
                 tags = 'empty'
-            return image_name, tags
+            return tags
         except Exception as exception:
             message = 'no instances in account'+str(exception)
             print(message)
             return message
-
-    def get_image_name(self,image_id):      
-        try:
-            response = self.ec2_client.describe_images(DryRun=False,ImageIds=image_id,IncludeDeprecated=True)
-            image_name = response['Images'][0]['Name']
-            return image_name
-        except Exception as exception:
-            print(str(exception))
-            raise Exception(str(exception))
 
     def build_instance_list(self, instance_tags): 
         instance_tag_env = []
@@ -83,10 +72,10 @@ class TagInstances(object):
             instance_tag_asg.append('null')
         try:
             i = tag_key_tmp.index('install_patch')
-            if tag_value_tmp[i]!='no' or tag_value_tmp[i]!='No':
-                instance_tag_patch.append('null')
-            elif tag_value_tmp[i]=='no' or tag_value_tmp[i]=='No':
+            if tag_value_tmp[i]=='no' or tag_value_tmp[i]=='No':
                 instance_tag_patch.append(tag_value_tmp[i])
+            else:
+                instance_tag_patch.append('null')
         except:
             instance_tag_patch.append('null')
         try:
@@ -124,12 +113,14 @@ class TagInstances(object):
 
     def tag_instances_main(self,instance_id):
         try:
-            [image_name, tags] = self.get_instance_list(instance_id)
+            tags = self.get_instance_list(instance_id)
             if tags != 'empty':
                 [instance_tag_env, instance_tag_asg, instance_tag_patch, instance_tag_eks] = self.build_instance_list(tags)
                 if any(s in instance_tag_patch for s in self.supported_patch_list) and any(s in instance_tag_asg for s in self.supported_asg_list) and any(s in instance_tag_eks for s in self.supported_eks_list):
                     if self.check_mw(self.env):
                         tag_list =  [{'Key': 'Patch Group','Value': self.env},{'Key': 'maintenance_window','Value': self.env+'_maintenance_window'}]
+                    elif (self.env in self.supported_env_list):
+                        tag_list =  [{'Key': 'Patch Group','Value': 'Default'},{'Key': 'platform_maintenance_window','Value': 'Default_maintenance_window'}]
                     else:
                         tag_list =  [{'Key': 'environment','Value': 'Default'},{'Key': 'Patch Group','Value': 'Default'},{'Key': 'maintenance_window','Value': 'Default_maintenance_window'}]
             else:
@@ -139,84 +130,93 @@ class TagInstances(object):
         except Exception as exp:
             print(str(exp))
 
-    def get_asg_list(self,target_asg):      
+    def get_asg_list(self,target_asg):
         try:
             response = self.as_client.describe_auto_scaling_groups(AutoScalingGroupNames=[target_asg])
-            response['AutoScalingGroups'][0]
-            is_eks = False
+            exempt = False
             for tags in response['AutoScalingGroups'][0]['Tags']:
-                if tags['Key'] == 'k8s.io/cluster-autoscaler/enabled' and tags['Value'] == 'TRUE':
-                    is_eks = True
-            if is_eks==False:
-                for tags in response['AutoScalingGroups'][0]['Tags']:                        
+                if (tags['Key'] == 'k8s.io/cluster-autoscaler/enabled' and tags['Value'] == 'TRUE') or (tags['Key'] == 'install_patch' and tags['Value'] == 'no'):
+                    exempt = True
+            if exempt==False:
+                self.env = 'null'
+                for tags in response['AutoScalingGroups'][0]['Tags']:                       
                     if tags['Key'] == 'environment' and tags['Value'] in self.supported_env_list:
                         self.env = tags['Value']
-                        try:
-                            launch_config_name = response['AutoScalingGroups'][0]['LaunchConfigurationName']
-                            image_id = self.as_client.describe_launch_configurations(LaunchConfigurationNames=[launch_config_name])['LaunchConfigurations'][0]['ImageId']
-                        except Exception as exp:
-                            print('Launch configuration not found')
-                            launch_template = response['AutoScalingGroups'][0]['LaunchTemplate']['LaunchTemplateId']
-                            launch_template_version = response['AutoScalingGroups'][0]['LaunchTemplate']['Version']
-                            response = self.ec2_client.describe_launch_template_versions(LaunchTemplateId=launch_template,Versions=[launch_template_version])
-                            image_id = response['LaunchTemplateVersions'][0]['LaunchTemplateData']['ImageId']
-                    else:
-                        self.env = 'null'
+                     
+            return exempt
 
-            return image_id
 
         except Exception as exp:  
             print('No such ASG '+str(exp))
 
     def tag_asg_main(self,asg_name):
         try:
-            asg_image_id = self.get_asg_list(asg_name)
-            image_name = self.get_image_name([asg_image_id])
-            if self.check_mw(self.env):
-                response = self.as_client.create_or_update_tags(
-                    Tags=[
-                        {
-                            'ResourceId': asg_name,
-                            'ResourceType': 'auto-scaling-group',
-                            'Key': 'Patch Group',
-                            'Value': self.env,
-                            'PropagateAtLaunch': False
-                        },        
-                        {
-                            'ResourceId': asg_name,
-                            'ResourceType': 'auto-scaling-group',
-                            'Key': 'maintenance_window',
-                            'Value': self.env+'_maintenance_window',
-                            'PropagateAtLaunch': False
-                        }
-                    ]
-                )
-            else:
-                response = self.as_client.create_or_update_tags(
-                    Tags=[
-                        {
-                            'ResourceId': asg_name,
-                            'ResourceType': 'auto-scaling-group',
-                            'Key': 'environment',
-                            'Value': 'Default',
-                            'PropagateAtLaunch': False
-                        },                            
-                        {
-                            'ResourceId': asg_name,
-                            'ResourceType': 'auto-scaling-group',
-                            'Key': 'Patch Group',
-                            'Value': 'Default',
-                            'PropagateAtLaunch': False
-                        },        
-                        {
-                            'ResourceId': asg_name,
-                            'ResourceType': 'auto-scaling-group',
-                            'Key': 'maintenance_window',
-                            'Value': 'Default_maintenance_window',
-                            'PropagateAtLaunch': False
-                        }
-                    ]
-                )
+            exempt = self.get_asg_list(asg_name)
+            if exempt == False:
+                if self.check_mw(self.env):
+                    response = self.as_client.create_or_update_tags(
+                        Tags=[
+                            {
+                                'ResourceId': asg_name,
+                                'ResourceType': 'auto-scaling-group',
+                                'Key': 'Patch Group',
+                                'Value': self.env,
+                                'PropagateAtLaunch': False
+                            },       
+                            {
+                                'ResourceId': asg_name,
+                                'ResourceType': 'auto-scaling-group',
+                                'Key': 'platform_maintenance_window',
+                                'Value': self.env+'_maintenance_window',
+                                'PropagateAtLaunch': False
+                            }
+                        ]
+                    )
+                elif (self.env in self.supported_env_list):
+                    response = self.as_client.create_or_update_tags(
+                        Tags=[
+                            {
+                                'ResourceId': asg_name,
+                                'ResourceType': 'auto-scaling-group',
+                                'Key': 'Patch Group',
+                                'Value': 'Default',
+                                'PropagateAtLaunch': False
+                            },       
+                            {
+                                'ResourceId': asg_name,
+                                'ResourceType': 'auto-scaling-group',
+                                'Key': 'platform_maintenance_window',
+                                'Value': 'Default_maintenance_window',
+                                'PropagateAtLaunch': False
+                            }
+                        ]
+                    )
+                else:
+                    response = self.as_client.create_or_update_tags(
+                        Tags=[
+                            {
+                                'ResourceId': asg_name,
+                                'ResourceType': 'auto-scaling-group',
+                                'Key': 'environment',
+                                'Value': 'Default',
+                                'PropagateAtLaunch': False
+                            },                           
+                            {
+                                'ResourceId': asg_name,
+                                'ResourceType': 'auto-scaling-group',
+                                'Key': 'Patch Group',
+                                'Value': 'Default',
+                                'PropagateAtLaunch': False
+                            },       
+                            {
+                                'ResourceId': asg_name,
+                                'ResourceType': 'auto-scaling-group',
+                                'Key': 'platform_maintenance_window',
+                                'Value': 'Default_maintenance_window',
+                                'PropagateAtLaunch': False
+                            }
+                        ]
+                    )
         except Exception as exp:
             print(str(exp))            
 

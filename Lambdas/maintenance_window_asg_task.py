@@ -40,9 +40,11 @@ class PatchingASG(object):
         self.asg_document_name = os.environ["ASG_DOCUMENT_NAME"]
         self.profile_role_name = os.environ["PROFILE_ROLE_NAME"]
         self.patching_template_region = os.environ["PATCHING_TEMPLATE_REGION"] 
+        regions = os.environ["WORKLOAD_REGIONS"]
+        self.regions = regions.split(",")
         self.accounts_id = sts_client.get_caller_identity()['Account']
-        session = Session()
-        self.regions = session.get_available_regions('ec2')
+        # session = Session()
+        # self.regions = session.get_available_regions('ec2')
         self.target_location_max_concurrency='1'
         self.target_location_max_errors='1'        
         try:
