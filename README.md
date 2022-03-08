@@ -164,26 +164,26 @@ In the child accounts, the servce catalog portfolio needs to be imported by the 
     ![](images/Launch-SC-2.png)
 5.  Fill in the parameters details in the respective section.
     ![](images/Launch-SC-3.png)
-    1. Select the environment tag attached to the instances: Choose the environment you are targetting to patch with this maintenance window
+    1. *Select the environment tag attached to the instances*: Choose the environment you are targetting to patch with this maintenance window
        It can take values such as Dev,Test or Prod
-    2. Select the frequency of patching applied: This represents the frequency of patching operation on your EC2 instances.Select from an enumerated list of frequency of    the patching window.
-    3. Enter the day of the week of the patching window: Select the day of the week when you want the maintenance window to trigger
-    4. Enter the start time of the patching window.
-    5. Enter the duation of the patching window in hours.
-    6. Select the patching operation:
-       Scan: Systems manager scans your instances or non-compliant patches
-       Install: AWS Systems manager scans your instances for non-compliant patches and installs the patches if found non-compliant.
-    7. Select the instance operation post patching:
-       RebootIfNeeded: Systems manager reboots the instance after installing the required patches, if it is needed.
-       NoReboot: Systems manager will not reboot the instance after installing the required patches. If some patches requries reboot to finish installation, you need to make sure the instance is rebooted at your convinience to avoid non-compliance.
+    2. *Select the frequency of patching applied*: This represents the frequency of patching operation on your EC2 instances.Select from an enumerated list of frequency of    the patching window.
+    3. *Enter the day of the week of the patching window*: Select the day of the week when you want the maintenance window to trigger
+    4. *Enter the start time of the patching window*: Select the time at which you want the maintenance window to start
+    5. *Enter the duation of the patching window in hours*: The duration of the maintenance window
+    6. *Select the patching operation*:
+       *Scan*: Systems manager scans your instances or non-compliant patches
+       *Install*: AWS Systems manager scans your instances for non-compliant patches and installs the patches if found non-compliant.
+    7. *Select the instance operation post patching*:
+       *RebootIfNeeded*: Systems manager reboots the instance after installing the required patches, if it is needed.
+       *NoReboot*: Systems manager will not reboot the instance after installing the required patches. If some patches requries reboot to finish installation, you need to make sure the instance is rebooted at your convinience to avoid non-compliance.
     The next section represents parameters for EC2 instances part of AutoScaling Group.
 
-    8. Select if to include AutoScaling Groups:
-       Select 'Yes' if you want to include EC2 instances part of AutoScaling Group in this patching regime, else select 'No'
-    9. Enter the percentage of remaining healthy instances during patching:
+    8. *Select if to include AutoScaling Groups*:
+       Select *'Yes'* if you want to include EC2 instances part of AutoScaling Group in this patching regime, else select *'No'*
+    9. *Enter the percentage of remaining healthy instances during patching*:
        This option signifies the percentage of healthy instances you want to maintain at a time in the AutoScaling Group while the instance refresh action is being carried out by the patching automation.
-    10. Select if to refresh the instances in ASG after updating the launch configuration:
-       Select 'Yes' if you want the automation to refresh your instances in the AutoScaling Group with instances launched from patched AMI, this takes consideration of the value you have provided in the previous parameter (percentage of remaining healthy instances during patching) and refreshes instances accordingly.
+    10. *Select if to refresh the instances in ASG after updating the launch configuration*:
+       Select *'Yes'* if you want the automation to refresh your instances in the AutoScaling Group with instances launched from patched AMI, this takes consideration of the value you have provided in the previous parameter (percentage of remaining healthy instances during patching) and refreshes instances accordingly.
       ![](images/Launch-SC-4.png)
   6. Click on Launch Product.
 
