@@ -194,6 +194,12 @@ In the child accounts, the servce catalog portfolio needs to be imported by the 
 
 ![](images/Flow-Diagram-Tag-monitoring.png)
 
+Based on the *environment* tag on the EC2 instance/AutoScaling group below patching tags will be applied.
+1. Patch Group = <Default/Dev/Test/Prod>
+2. maintenance_window = <Default/Dev/Test/Prod>_maintenance_window
+
+**Note**: Default tags will be applied if the user forgets to apply right *environment* tag to the EC2 instance/AutoScaling Group based on the workload. the correspnding resource will be patched based on the enforced [Default Maintenance Window](#Default-Maintenance-Window).
+
 An AWS config rule checks for the tag compliance in each of the child accounts. An Event bridge rule listens for compliance change and triggers lambda function. The lambda function does the following:
 
 1.	For EC2 instances:
