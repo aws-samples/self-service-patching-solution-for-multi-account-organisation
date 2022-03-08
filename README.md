@@ -234,21 +234,21 @@ Steps:
 8.	Click on “Import to SPICE for quicker analytics”
 9.	Click on Visualize
 10.	Prepare the view
-  1.	Select the Correct Dataset
-  2.	Drag platformtype to X axis
-  3.	Drag resourceid to Group/Color 
+    1.	Select the Correct Dataset
+    2.	Drag platformtype to X axis
+    3.	Drag resourceid to Group/Color 
       ![](images/Quicksight-dashboard-1.png)
 
 11.	Total managed instance count grouped by compliance status
-  1.	Select Dataset as patch_table
-  2.	Drag status to Group/Color
-  3.	Select Donut Chart
+    1.	Select Dataset as patch_table
+    2.	Drag status to Group/Color
+    3.	Select Donut Chart
       ![](images/Quicksight-dashboard-2.png)
 
 12.	Patch Compliance status grouped by account id.
-  1.	Select Dataset as patch_table
-  2.	Drag accountid to X axis
-  3.	Drag status to Group/Color
+    1.	Select Dataset as patch_table
+    2.	Drag accountid to X axis
+    3.	Drag status to Group/Color
       ![](images/Quicksight-dashboard-4.png)
 
 # Tear-Down Instructions
