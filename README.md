@@ -111,6 +111,7 @@ There is an AWS Step function which provides the central team a platform to inte
 1. Central platform/operation team member initiates the Emergency patching process by triggering the AWS Step function and provide necessary parameters like environment to target, resources and a S3 path style url specifying the external file in case of any ad-hoc patches using installOverrideList : https://docs.aws.amazon.com/systems-manager/latest/userguide/override-list-scenario.html 
 
 Sample payload:
+```
 {
   "env": "Default",
   "include_asg": "Yes"
@@ -120,7 +121,7 @@ Sample payload:
   "operation_post_patching": "RebootIfNeeded"
   "run_patch_baseline_install_override_list": ""                            
 }
-
+```
 Detail description of the parameters have been mentioned in [Launch Service Catalog Product](#Launch-Service-Catalog-Product) section
 
 2. The state machine triggers a lambda function in the payer account which fetches the child account details in the organization, assumes a role into the child accounts and invokes the orchestrator lambda functions for patching.
