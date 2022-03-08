@@ -171,11 +171,11 @@ In the child accounts, the servce catalog portfolio needs to be imported by the 
     4. **Enter the start time of the patching window**: Select the time at which you want the maintenance window to start
     5. **Enter the duation of the patching window in hours**: The duration of the maintenance window
     6. **Select the patching operation**:
-       **Scan**: Systems manager scans your instances or non-compliant patches
-       **Install**: AWS Systems manager scans your instances for non-compliant patches and installs the patches if found non-compliant.
+       1. **Scan**: Systems manager scans your instances or non-compliant patches
+       2. **Install**: AWS Systems manager scans your instances for non-compliant patches and installs the patches if found non-compliant.
     7. **Select the instance operation post patching**:
-       **RebootIfNeeded**: Systems manager reboots the instance after installing the required patches, if it is needed.
-       **NoReboot**: Systems manager will not reboot the instance after installing the required patches. If some patches requries reboot to finish installation, you need to make sure the instance is rebooted at your convinience to avoid non-compliance.
+       1. **RebootIfNeeded**: Systems manager reboots the instance after installing the required patches, if it is needed.
+       2. **NoReboot**: Systems manager will not reboot the instance after installing the required patches. If some patches requries reboot to finish installation, you need to make sure the instance is rebooted at your convinience to avoid non-compliance.
     The next section represents parameters for EC2 instances part of AutoScaling Group.
 
     8. **Select if to include AutoScaling Groups**:
