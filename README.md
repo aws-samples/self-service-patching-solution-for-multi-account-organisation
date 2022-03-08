@@ -43,28 +43,28 @@
 1.	Clone the repository.
 2.	Upload the zip versions of the .py files and patching_window.template file to a S3 bucket.
 3.	Upload the patching-stack.yml file and deploy the CloudFormation template in master account
-    a.	Provide a stack name.
-    b.	Specify the bucket, where you have uploaded the code.
-    c.	Specify the Organization id.
+    1.	Provide a stack name.
+    2.	Specify the bucket, where you have uploaded the code.
+    3.	Specify the Organization id.
         ![](images/Deploy-Stack-1.png)
-    d.	Click on Next
-    e.	Hit Next and check “I acknowledge that AWS CloudFormation might create IAM resources with custom names”
-    f.	Click on “Create Stack”.
+    4.	Click on Next
+    5.	Hit Next and check “I acknowledge that AWS CloudFormation might create IAM resources with custom names”
+    6.	Click on “Create Stack”.
 4.  Deploy patching-stackset.yml in child accounts as stack or stackset
-    a.	Enter a name for the StackSet.
+    1.	Enter a name for the StackSet.
         ![](images/Deploy_stackset_Step4-a.png)
-    b.	Navigate to the Outputs section of the stack launched in step-3 and fetch the below information.
+    2.	Navigate to the Outputs section of the stack launched in step-3 and fetch the below information.
         ![](images/Deploy_stackset_Step4-b.png)
     
-    c.	Click Next
-    d.	Click Next
-    e.	Select Deployment target as “Deploy to organization”
+    3.	Click Next
+    4.	Click Next
+    5.	Select Deployment target as “Deploy to organization”
         ![](images/Deploy_stackset_Step4-c.png)
     
-    f.	Select all the regions you want to cover.
-    g.	Click on Next.
-    h.	Scroll down and select the check box “I acknowledge that AWS CloudFormation might create IAM resources with custom names”.
-    i.	Click on Submit.
+    6.	Select all the regions you want to cover.
+    7.	Click on Next.
+    8.	Scroll down and select the check box “I acknowledge that AWS CloudFormation might create IAM resources with custom names”.
+    9.	Click on Submit.
 
 # Usage
 
@@ -88,22 +88,22 @@
 1.	Once the maintenance window starts in the designated schedule, it invokes the task lambda based on the target (Standalone Instance vs AutoScaling Group)
 2.	The lambda function invokes the respective SSM automation document and provide all the necessary parameters.
 3.	For Standalone Instance:
-    a.	SSM Automation document navigates to each designated regions.
-    b.	Applies AWS-RunPatchBaseline command to the instances with specific tags
-    c.	Reboot the instances, if selected by the user as post patching operation
+    1.	SSM Automation document navigates to each designated regions.
+    2.	Applies AWS-RunPatchBaseline command to the instances with specific tags
+    3.	Reboot the instances, if selected by the user as post patching operation
 4.	For Instances part of AutoScaling Group:
-    a.	SSM automation document navigates to each designated regions.
-    b.	Get the Autoscaling group names based on certain tags.
-    c.	Fetch the AMI id from the launch configuration/launch template.
-    d.	Follow series of steps to generate a patched AMI
-        i.	Create an intermediate instance from the AMI
-        ii.	Applied AWS-RunPatchBaseline to the instance
-        iii.	Stop the intermediate instance
-        iv.	Create AMI
-        v.	Terminate the intermediate instance
-    e.	Update launch configuration with the patched AMI.
-    f.	Initiate Instance Refresh action based on the user input.
-    g.	Wait for the instance refresh action to complete and scan the instances.
+    1.	SSM automation document navigates to each designated regions.
+    2.	Get the Autoscaling group names based on certain tags.
+    3.	Fetch the AMI id from the launch configuration/launch template.
+    4.	Follow series of steps to generate a patched AMI
+        1.	Create an intermediate instance from the AMI
+        2.	Applied AWS-RunPatchBaseline to the instance
+        3.	Stop the intermediate instance
+        4.	Create AMI
+        5.	Terminate the intermediate instance
+    5.	Update launch configuration with the patched AMI.
+    6.	Initiate Instance Refresh action based on the user input.
+    7.	Wait for the instance refresh action to complete and scan the instances.
 
 ## Emergency Patching Process
 
@@ -149,25 +149,25 @@ In the child accounts, the servce catalog portfolio needs to be imported by the 
     ![](images/Launch-SC-2.png)
 5.  Fill in the parameters details in the respective section.
     ![](images/Launch-SC-3.png)
-    a. Select the environment tag attached to the instances: Choose the environment you are targetting to patch with this maintenance window
+    1. Select the environment tag attached to the instances: Choose the environment you are targetting to patch with this maintenance window
        It can take values such as Dev,Test or Prod
-    b. Select the frequency of patching applied: This represents the frequency of patching operation on your EC2 instances.Select from an enumerated list of frequency of    the patching window.
-    c. Enter the day of the week of the patching window: Select the day of the week when you want the maintenance window to trigger
-    d. Enter the start time of the patching window.
-    e. Enter the duation of the patching window in hours.
-    f. Select the patching operation:
+    2. Select the frequency of patching applied: This represents the frequency of patching operation on your EC2 instances.Select from an enumerated list of frequency of    the patching window.
+    3. Enter the day of the week of the patching window: Select the day of the week when you want the maintenance window to trigger
+    4. Enter the start time of the patching window.
+    5. Enter the duation of the patching window in hours.
+    6. Select the patching operation:
        Scan: Systems manager scans your instances or non-compliant patches
        Install: AWS Systems manager scans your instances for non-compliant patches and installs the patches if found non-compliant.
-    g. Select the instance operation post patching:
+    7. Select the instance operation post patching:
        RebootIfNeeded: Systems manager reboots the instance after installing the required patches, if it is needed.
        NoReboot: Systems manager will not reboot the instance after installing the required patches. If some patches requries reboot to finish installation, you need to make sure the instance is rebooted at your convinience to avoid non-compliance.
     The next section represents parameters for EC2 instances part of AutoScaling Group.
 
-    h. Select if to include AutoScaling Groups:
+    8. Select if to include AutoScaling Groups:
        Select 'Yes' if you want to include EC2 instances part of AutoScaling Group in this patching regime, else select 'No'
-    i. Enter the percentage of remaining healthy instances during patching:
+    9. Enter the percentage of remaining healthy instances during patching:
        This option signifies the percentage of healthy instances you want to maintain at a time in the AutoScaling Group while the instance refresh action is being carried out by the patching automation.
-    j. Select if to refresh the instances in ASG after updating the launch configuration:
+    10. Select if to refresh the instances in ASG after updating the launch configuration:
        Select 'Yes' if you want the automation to refresh your instances in the AutoScaling Group with instances launched from patched AMI, this takes consideration of the value you have provided in the previous parameter (percentage of remaining healthy instances during patching) and refreshes instances accordingly.
       ![](images/Launch-SC-4.png)
   6. Click on Launch Product.
@@ -181,13 +181,13 @@ In the child accounts, the servce catalog portfolio needs to be imported by the 
 An AWS config rule checks for the tag compliance in each of the child accounts. An Event bridge rule listens for compliance change and triggers lambda function. The lambda function does the following:
 
 1.	For EC2 instances:
-  a.	It checks for the Autoscaling tag key (aws:autoscaling:groupName), EKS tag key (Alpha.eksctl.io/nodegroup-name), exception tag (patch_install=no)
-  b.	If any of the tags found, the lambda function does nothing
-  c.	If none of the tags found, the lambda function verifies the patch maintenance window and applies the patch tags accordingly.
+  1.	It checks for the Autoscaling tag key (aws:autoscaling:groupName), EKS tag key (Alpha.eksctl.io/nodegroup-name), exception tag (patch_install=no)
+  2.	If any of the tags found, the lambda function does nothing
+  3.	If none of the tags found, the lambda function verifies the patch maintenance window and applies the patch tags accordingly.
 2.	For AutoScaling Group:
-  a.	It checks for the EKS tag (k8s.io/cluster-autoscaler/enabled=true) and exception tag (patch_install=no)
-  b.	If any of the tags found, the lambda function does nothing
-  c.	If none of the tags found, the lambda function verifies the patch maintenance window and applies the patch tags accordingly.
+  1.	It checks for the EKS tag (k8s.io/cluster-autoscaler/enabled=true) and exception tag (patch_install=no)
+  2.	If any of the tags found, the lambda function does nothing
+  3.	If none of the tags found, the lambda function verifies the patch maintenance window and applies the patch tags accordingly.
 
 # Compliance Reporting
 
@@ -234,22 +234,22 @@ Steps:
 8.	Click on “Import to SPICE for quicker analytics”
 9.	Click on Visualize
 10.	Prepare the view
-  a.	Select the Correct Dataset
-  b.	Drag platformtype to X axis
-  c.	Drag resourceid to Group/Color 
+  1.	Select the Correct Dataset
+  2.	Drag platformtype to X axis
+  3.	Drag resourceid to Group/Color 
       ![](images/Quicksight-dashboard-1.png)
 
 11.	Total managed instance count grouped by compliance status
-  a.	Select Dataset as patch_table
-  b.	Drag status to Group/Color
-  c.	Select Donut Chart
+  1.	Select Dataset as patch_table
+  2.	Drag status to Group/Color
+  3.	Select Donut Chart
       ![](images/Quicksight-dashboard-2.png)
 
 12.	Patch Compliance status grouped by account id.
-  a.	Select Dataset as patch_table
-  b.	Drag accountid to X axis
-  c.	Drag status to Group/Color
-      ![](images/Quicksight-dashboard-3.png)
+  1.	Select Dataset as patch_table
+  2.	Drag accountid to X axis
+  3.	Drag status to Group/Color
+      ![](images/Quicksight-dashboard-4.png)
 
 # Tear-Down Instructions
 
