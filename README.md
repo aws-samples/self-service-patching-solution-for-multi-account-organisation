@@ -71,7 +71,7 @@
 ## Prerequisites
 
 1.	Active EC2 instances in the child accounts with Systems manager agent installed
-2.	Instance profile having access to Systems manager and central S3 bucket attached to the EC2 instances.
+2.	Instance profile having access to Systems manager and central S3 bucket attached to the EC2 instances.An Instance Profile *"ASGInstanceProfile"* is being created as part of the automation in all the child accounts with necessary privileges.
 3.	environment=<Dev/Test/Prod> tag attached to the instance based on the workload
 4.	Share the service catalog in the payer account across the organization.
 
