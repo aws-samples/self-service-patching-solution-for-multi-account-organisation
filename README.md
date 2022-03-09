@@ -18,6 +18,7 @@
         - [Share Service Catalog Portfolio](#Share-Service-Catalog-Portfolio)
         - [Import Service Catalog Portfolio](#Import-Service-Catalog-Portfolio)
         - [Launch Service Catalog Product](#Launch-Service-Catalog-Product)
+- [Exception-Management](#Exception-Management)
 - [Tag-Monitoring](#Tag-Monitoring)
 - [Compliance Reporting](#Compliance-Reporting)
     - [Athena Query](#Athena-Query)
@@ -189,6 +190,11 @@ In the child accounts, the servce catalog portfolio needs to be imported by the 
   6. Click on Launch Product.
 
   Note: The service catalog product will create a patch maintenance window in your account in the designated region and also trigger a tagging lambda function which will look for environment tag on your EC2 instances/AutoScaling Groups and put the patching tags on it accordingly. 
+
+# Exception Management
+
+This solution provides a way to exempt any EC2 instance or AutoScaling group from Patch management. You need to add an exception tag **'patch_install=no'** to the respective resources to exempt from the patching regime.
+The automation will not create tags related to patching on those resources which has the exception tag.
 
 # Tag-Monitoring
 
