@@ -56,16 +56,16 @@
         ![](images/Deploy_stackset_Step4-a.png)
     2.	Navigate to the Outputs section of the stack launched in step-3 and fetch the below information.
         ![](images/Deploy_stackset_Step4-b.png)
-    
-    3.	Click Next
+    3.  Specify the regions separated by comma, in which you have EC2 workload
     4.	Click Next
-    5.	Select Deployment target as “Deploy to organization”
+    5.	Click Next
+    6.	Select Deployment target as “Deploy to organization”
         ![](images/Deploy_stackset_Step4-c.png)
     
-    6.	Select all the regions you want to cover.
-    7.	Click on Next.
-    8.	Scroll down and select the check box “I acknowledge that AWS CloudFormation might create IAM resources with custom names”.
-    9.	Click on Submit.
+    7.	Select all the regions you want to cover.
+    8.	Click on Next.
+    9.	Scroll down and select the check box “I acknowledge that AWS CloudFormation might create IAM resources with custom names”.
+    10.	Click on Submit.
 
 # Usage
 
