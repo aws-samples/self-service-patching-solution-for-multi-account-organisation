@@ -346,7 +346,7 @@ Resources:
           ASG_UPDATE_LAMBDA_NAME: !Ref UpdateASGFunction 
           ASG_EXECUTION_ROLE_NAME: !Ref AutomationAdministrationServiceRole
           ASG_DOCUMENT_NAME: !Ref ASGEC2PatchDocument
-          PROFILE_ROLE_NAME: !Ref ASGInstanceProfile
+          PROFILE_ROLE_NAME: !Ref InstanceProfileforPatching
           ADMINISTRATION_ROLE_NAME: !Ref AutomationAdministrationServiceRole
           EXECUTION_ROLE_NAME: !Ref AutomationExecutionServiceRole
           DOCUMENT_NAME: !Ref StandaloneEC2PatchDocument
@@ -498,7 +498,7 @@ Resources:
                   - s3:GetObject
                 Resource: !Sub ${BaselineOverrideBucket}/*
 
-  ASGInstanceRole:
+  PatchingInstanceRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -526,14 +526,14 @@ Resources:
               - !Join [ '', ['arn:aws:s3:::', !Ref 'PatchingExecutionLogsBucketName'] ]
               - !Join [ '', ['arn:aws:s3:::', !Ref 'PatchingExecutionLogsBucketName', '/*'] ]
 
-  ASGInstanceProfile:
+  InstanceProfileforPatching:
     Condition: CreateResources
     Type: AWS::IAM::InstanceProfile
     Properties:
       Path: "/"
       Roles:
-      - !Ref ASGInstanceRole
-      InstanceProfileName: ASGInstanceProfile 
+      - !Ref PatchingInstanceRole
+      InstanceProfileName: InstanceProfileforPatching 
 
 # Standalone EC2 SSM patching document
   StandaloneEC2PatchDocument:
