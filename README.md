@@ -18,6 +18,8 @@
         - [Share Service Catalog Portfolio](#Share-Service-Catalog-Portfolio)
         - [Import Service Catalog Portfolio](#Import-Service-Catalog-Portfolio)
         - [Launch Service Catalog Product](#Launch-Service-Catalog-Product)
+        - [Update Service Catalog Product](#update-Service-Catalog-Product)
+        - [Delete Service Catalog Product](#delete-Service-Catalog-Product)
 - [Exception-Management](#Exception-Management)
 - [Tag-Monitoring](#Tag-Monitoring)
 - [Compliance Reporting](#Compliance-Reporting)
@@ -190,6 +192,23 @@ In the child accounts, the servce catalog portfolio needs to be imported by the 
   6. Click on Launch Product.
 
   Note: The service catalog product will create a patch maintenance window in your account in the designated region and also trigger a tagging lambda function which will look for environment tag on your EC2 instances/AutoScaling Groups and put the patching tags on it accordingly. 
+
+### Update Service Catalog Product
+In case you want to update any inputs provided while creating the patch maintenance window, you can update the service catalog product and update the necessary parameters.
+1. Navigate to Service Catalog and click on Provisioned products
+2. Select your product and click on Actions
+3. Click on Update
+4. Update the required parameter and click on Update.
+
+### Delete Service Catalog Product
+In case you want to delete the patch maintenance window, follow the steps to perform the deletion
+1. Navigate to Service Catalog and click on Provisioned products
+2. Select your product and click on Actions
+3. Click on terminate
+4. Type in terminate and click on Terminate provisioned product.
+
+**Note:** Deleting the service catalog product will delete the patch maintenance window and all the EC2 instances/AutoScaling groups covered by the patch maintenance window will be tagged with Default tags and the patch management will be covered under [Default Maintenance Window](#Default-Maintenance-Window)
+If you do not want to patch any EC2 instance, follow the process outlined in [Exception-Management](#Exception-Management)
 
 # Exception Management
 
