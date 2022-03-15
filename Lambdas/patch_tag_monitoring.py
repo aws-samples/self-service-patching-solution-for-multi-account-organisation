@@ -123,6 +123,8 @@ class TagInstances(object):
                         tag_list =  [{'Key': 'Patch Group','Value': 'Default'},{'Key': 'platform_maintenance_window','Value': 'Default_maintenance_window'}]
                     else:
                         tag_list =  [{'Key': 'environment','Value': 'Default'},{'Key': 'Patch Group','Value': 'Default'},{'Key': 'maintenance_window','Value': 'Default_maintenance_window'}]
+                response = self.add_tags([instance_id], tag_list)
+                
             else:
                 tag_list =  [{'Key': 'environment','Value': 'Default'},{'Key': 'Patch Group','Value': 'Default'},{'Key': 'maintenance_window','Value': 'Default_maintenance_window'}]
             response = self.add_tags([instance_id], tag_list)

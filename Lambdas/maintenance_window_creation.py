@@ -143,9 +143,12 @@ def maintenance_main(event,context):
     weekday = event['ResourceProperties']['PatchingWindowWeekday']
     start_time = event['ResourceProperties']['PatchingWindowStartTime']
     duration = int(event['ResourceProperties']['PatchingWindowDuration'])
-    if event['RequestType'] in ['Update', 'Delete']:
+    if event['RequestType'] == 'Delete':
         status = maintenance_window.delete_maintenance_window_call(env)
-        if status == 'SUCCESS' and event['RequestType'] == 'Update':
+    elif event['RequestType'] == 'Update':
+        old_env = event['OldResourceProperties']['Environment']
+        status = maintenance_window.delete_maintenance_window_call(old_env)
+        if status == 'SUCCESS':
             [status, window_id] = maintenance_window.create_maintenance_window_call(env,frequency,weekday,start_time,duration)
             helper.Data['WindowId'] = window_id
     elif event['RequestType'] == 'Create':

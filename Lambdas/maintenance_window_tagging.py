@@ -41,17 +41,14 @@ class TagInstances(object):
             self.supported_asg_list = ['null']
             self.supported_patch_list = ['null']            
             self.supported_eks_list = ['null']            
-            self.tag_list =  [{'Key': 'Patch Group','Value': self.env},{'Key': 'maintenance_window','Value': self.env+'_maintenance_window'}]                        
             print("resource_properties", resource_properties)
         except Exception as exception:
             self.reason_data = "Missing required property %s" % exception
             LOGGER.error(self.reason_data)
             print("Failed in except block of __init__")
-        # session = Session()
-        # self.regions = session.get_available_regions('ec2')
-        # print(self.regions)
 
-    def get_instance_list(self):      
+
+    def get_instance_list(self,env):
         try:
             response = self.ec2_client.describe_instances(
                             DryRun=False,
@@ -59,7 +56,7 @@ class TagInstances(object):
                             Filters=[
                                 {
                                     'Name': 'tag:environment',
-                                    'Values': [self.env]
+                                    'Values': [env]
                                 }
                             ])
             instance_list_tmp = [r['Instances'] for r in response['Reservations']]
@@ -107,10 +104,10 @@ class TagInstances(object):
                 instance_tag_asg.append('null')
             try:
                 i = tag_key_tmp.index('install_patch')
-                if tag_value_tmp[i]!='no' or tag_value_tmp[i]!='No':
+                if tag_value_tmp[i]=='no' or tag_value_tmp[i]=='No':
+                    instance_tag_patch.append(tag_value_tmp[i])                    
+                else:
                     instance_tag_patch.append('null')
-                elif tag_value_tmp[i]=='no' or tag_value_tmp[i]=='No':
-                    instance_tag_patch.append(tag_value_tmp[i])
             except:
                 instance_tag_patch.append('null')
             try:
@@ -142,12 +139,12 @@ class TagInstances(object):
             return message  
 
 
-    def tag_instances_main(self):
+    def tag_instances_main(self,env,old_env=False):
         try:
             for region in self.regions:
                 self.ec2_client = boto3.client('ec2',region_name=region)
                 self.as_client = boto3.client('autoscaling',region_name=region)                
-                instance_list = self.get_instance_list()
+                instance_list = self.get_instance_list(env)
                 if instance_list != 'empty':
                     [instance_id, instance_state, instance_tag_asg, instance_tag_patch, instance_tag_eks] = self.build_instance_list(instance_list)
 
@@ -163,9 +160,13 @@ class TagInstances(object):
                     
                     filtered_instance_id = [instance_id[i] for i in combined_ind]
 
-                    if self.event['RequestType'] == 'Delete':
-                        self.tag_list =  [{'Key': 'Patch Group','Value': 'Default'},{'Key': 'maintenance_window','Value': 'Default_maintenance_window'}]                        
-                    response = self.add_tags(filtered_instance_id, self.tag_list)             
+                    if self.event['RequestType'] == 'Delete' or old_env==True:
+                        tag_list =  [{'Key': 'Patch Group','Value': 'Default'},{'Key': 'maintenance_window','Value': 'Default_maintenance_window'}]                        
+                    else:
+                        tag_list =  [{'Key': 'Patch Group','Value': self.env},{'Key': 'maintenance_window','Value': self.env+'_maintenance_window'}]                        
+                    if filtered_instance_id:
+                        response = self.add_tags(filtered_instance_id, tag_list)
+
             status = "SUCCESS"                
             return status
         except Exception as exp:
@@ -173,7 +174,7 @@ class TagInstances(object):
             return status
 
 
-    def get_asg_list(self,env):      
+    def get_asg_list(self,env):
         try:
             response = self.as_client.describe_auto_scaling_groups()
             asg_name=[]
@@ -183,7 +184,7 @@ class TagInstances(object):
                     if tags['Key'] == 'k8s.io/cluster-autoscaler/enabled' and tags['Value'] == 'TRUE':
                         is_eks = True
                 if is_eks==False:
-                    for tags in group['Tags']:                        
+                    for tags in group['Tags']:
                         if tags['Key'] == 'environment' and tags['Value'] == env:
                             asg_name.append(group['AutoScalingGroupName'])
                                             
@@ -193,31 +194,31 @@ class TagInstances(object):
             print('No such ASG '+str(exp))
 
 
-    def tag_asg_main(self):
+    def tag_asg_main(self,env,old_env=False):
         try:
             for region in self.regions:
                 self.as_client = boto3.client('autoscaling',region_name=region)
                 self.ec2_client = boto3.client('ec2',region_name=region)                
-                asg_name = self.get_asg_list(self.env)
-                env = self.env
-                if self.event['RequestType'] == 'Delete':
-                    env = 'Default'
+                asg_name = self.get_asg_list(env)
+                if self.event['RequestType'] == 'Delete' or old_env == True:
+                    tag_env = 'Default'
+                else:
+                    tag_env = self.env
                 for filtered_asg_name in asg_name:
-                    print(filtered_asg_name)    
                     response = self.as_client.create_or_update_tags(
                         Tags=[
                             {
                                 'ResourceId': filtered_asg_name,
                                 'ResourceType': 'auto-scaling-group',
                                 'Key': 'Patch Group',
-                                'Value': env,
+                                'Value': tag_env,
                                 'PropagateAtLaunch': False
                             },        
                             {
                                 'ResourceId': filtered_asg_name,
                                 'ResourceType': 'auto-scaling-group',
                                 'Key': 'maintenance_window',
-                                'Value': env+'_maintenance_window',
+                                'Value': tag_env+'_maintenance_window',
                                 'PropagateAtLaunch': False
                             }
                         ]
@@ -234,14 +235,25 @@ class TagInstances(object):
 @helper.delete
 def instance_asg_tagging_main(event, context):
     tag_instances = TagInstances(event,context)
+    env = event['ResourceProperties']['Environment']
     if event['RequestType'] == 'Delete':
-        status  = tag_instances.tag_instances_main()
+        status  = tag_instances.tag_instances_main(env)
         if status=='SUCCESS' and event['ResourceProperties']['IncludeASG'] == 'Yes':
-            status = tag_instances.tag_asg_main()
-    elif event['RequestType'] in ['Update', 'Create']:
-        status  = tag_instances.tag_instances_main()
+            status = tag_instances.tag_asg_main(env)
+    elif event['RequestType'] == 'Update':
+        old_env = event['OldResourceProperties']['Environment']    
+        env = event['ResourceProperties']['Environment']
+        if old_env!=env:
+            status = tag_instances.tag_instances_main(old_env,True)
+            if status=='SUCCESS' and event['ResourceProperties']['IncludeASG'] == 'Yes':
+                status = tag_instances.tag_asg_main(old_env,True)            
+        status  = tag_instances.tag_instances_main(env)
         if status=='SUCCESS' and event['ResourceProperties']['IncludeASG'] == 'Yes':
-            status = tag_instances.tag_asg_main()
+            status = tag_instances.tag_asg_main(env)
+    elif event['RequestType'] == 'Create':
+        status  = tag_instances.tag_instances_main(env)
+        if status=='SUCCESS' and event['ResourceProperties']['IncludeASG'] == 'Yes':
+            status = tag_instances.tag_asg_main(env)
     helper.Data['TaggingStatus'] = status
 
 def lambda_handler(event, context):
