@@ -120,7 +120,7 @@ class TagInstances(object):
                     if self.check_mw(self.env):
                         tag_list =  [{'Key': 'Patch Group','Value': self.env},{'Key': 'maintenance_window','Value': self.env+'_maintenance_window'}]
                     elif (self.env in self.supported_env_list):
-                        tag_list =  [{'Key': 'Patch Group','Value': 'Default'},{'Key': 'platform_maintenance_window','Value': 'Default_maintenance_window'}]
+                        tag_list =  [{'Key': 'Patch Group','Value': 'Default'},{'Key': 'maintenance_window','Value': 'Default_maintenance_window'}]
                     else:
                         tag_list =  [{'Key': 'environment','Value': 'Default'},{'Key': 'Patch Group','Value': 'Default'},{'Key': 'maintenance_window','Value': 'Default_maintenance_window'}]
                 response = self.add_tags([instance_id], tag_list)
@@ -168,7 +168,7 @@ class TagInstances(object):
                             {
                                 'ResourceId': asg_name,
                                 'ResourceType': 'auto-scaling-group',
-                                'Key': 'platform_maintenance_window',
+                                'Key': 'maintenance_window',
                                 'Value': self.env+'_maintenance_window',
                                 'PropagateAtLaunch': False
                             }
@@ -187,7 +187,7 @@ class TagInstances(object):
                             {
                                 'ResourceId': asg_name,
                                 'ResourceType': 'auto-scaling-group',
-                                'Key': 'platform_maintenance_window',
+                                'Key': 'maintenance_window',
                                 'Value': 'Default_maintenance_window',
                                 'PropagateAtLaunch': False
                             }
@@ -213,7 +213,7 @@ class TagInstances(object):
                             {
                                 'ResourceId': asg_name,
                                 'ResourceType': 'auto-scaling-group',
-                                'Key': 'platform_maintenance_window',
+                                'Key': 'maintenance_window',
                                 'Value': 'Default_maintenance_window',
                                 'PropagateAtLaunch': False
                             }
