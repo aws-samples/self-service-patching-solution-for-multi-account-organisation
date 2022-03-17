@@ -232,7 +232,7 @@ An AWS config rule checks for the tag compliance in each of the child accounts. 
     2. If any of the tags found, the lambda function does nothing
     3. If none of the tags found, the lambda function verifies the patch maintenance window and applies the patch tags accordingly.
 2.	For AutoScaling Group:
-    1. It checks for the EKS tag (k8s.io/cluster-autoscaler/enabled=true) and exception tag (patch_install=no)
+    1. It checks for the EKS tag (k8s.io/cluster-autoscaler/enabled=TRUE) and exception tag (patch_install=no)
     2. If any of the tags found, the lambda function does nothing
     3. If none of the tags found, the lambda function verifies the patch maintenance window and applies the patch tags accordingly.
 
