@@ -212,7 +212,7 @@ If you do not want to patch any EC2 instance, follow the process outlined in [Ex
 
 # Exception Management
 
-This solution provides a way to exempt any EC2 instance or AutoScaling group from Patch management. You need to add an exception tag **'patch_install=no'** to the respective resources to exempt from the patching regime.
+This solution provides a way to exempt any EC2 instance or AutoScaling group from Patch management. You need to add an exception tag **'install_patch=no'** to the respective resources to exempt from the patching regime.
 The automation will not create tags related to patching on those resources which has the exception tag.
 
 # Tag-Monitoring

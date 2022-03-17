@@ -417,7 +417,7 @@ Resources:
               Resource: 
               - !Join [ '', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':role/SystemsManager-AutomationExecutionRole'] ]
               - !Join [ '', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':role/AutomationExecutionRole'] ]
-              - !Join [ '', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':role/service_instance'] ]
+              - !Join [ '', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':role/', !Ref 'PatchingInstanceRole'] ]
         - PolicyName: getTagPermissions
           PolicyDocument:
             Version: '2012-10-17'
