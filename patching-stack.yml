@@ -251,9 +251,10 @@ Resources:
       FunctionName: emergency_patching
       Environment:
         Variables:
-          TASK_LAMBDA_NAME: maintenance_window_task
-          ASG_TASK_LAMBDA_NAME: maintenance_window_asg_task
+          TASK_LAMBDA_NAME: MaintenanceWindowASGTaskFunction
+          ASG_TASK_LAMBDA_NAME: MaintenanceWindowTaskFunction
           DEPLOYMENT_REGION: !Ref AWS::Region
+          PATCHING_TEMPLATE_REGION: !Ref AWS::Region
           CHILD_ACCOUNT_ROLE: EmergencyPatchingRole
       Handler: emergency_patching.lambda_handler
       Role: !GetAtt EmergencyPatchingFunctionRole.Arn
