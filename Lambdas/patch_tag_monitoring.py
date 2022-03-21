@@ -32,7 +32,8 @@ class TagInstances(object):
             self.supported_env_list = ['Default','Dev','Test','Prod'] 
             self.supported_asg_list = ['null']
             self.supported_patch_list = ['null']            
-            self.supported_eks_list = ['null']            
+            self.supported_eks_list = ['null']
+            self.supported_ecs_list = ['null']
         except Exception as exception:
             self.reason_data = "Missing required property %s" % exception
             LOGGER.error(self.reason_data)
@@ -56,6 +57,7 @@ class TagInstances(object):
         instance_tag_asg = []
         instance_tag_patch = []
         instance_tag_eks = []
+        instance_tag_ecs = []
         tag_key_tmp = [r['Key'] for r in instance_tags]
         tag_value_tmp = [r['Value'] for r in instance_tags]
         try:
@@ -83,8 +85,13 @@ class TagInstances(object):
             instance_tag_eks.append(tag_value_tmp[i])
         except:
             instance_tag_eks.append('null')
+        try:
+            i = tag_key_tmp.index('AmazonECSManaged')
+            instance_tag_ecs.append('ecs')
+        except:
+            instance_tag_ecs.append('null')
 
-        return instance_tag_env, instance_tag_asg, instance_tag_patch, instance_tag_eks
+        return instance_tag_env, instance_tag_asg, instance_tag_patch, instance_tag_eks, instance_tag_ecs
 
     def add_tags(self, id_list, tag_list):
         try:
@@ -115,8 +122,8 @@ class TagInstances(object):
         try:
             tags = self.get_instance_list(instance_id)
             if tags != 'empty':
-                [instance_tag_env, instance_tag_asg, instance_tag_patch, instance_tag_eks] = self.build_instance_list(tags)
-                if any(s in instance_tag_patch for s in self.supported_patch_list) and any(s in instance_tag_asg for s in self.supported_asg_list) and any(s in instance_tag_eks for s in self.supported_eks_list):
+                [instance_tag_env, instance_tag_asg, instance_tag_patch, instance_tag_eks, instance_tag_ecs] = self.build_instance_list(tags)
+                if any(s in instance_tag_patch for s in self.supported_patch_list) and any(s in instance_tag_asg for s in self.supported_asg_list) and any(s in instance_tag_eks for s in self.supported_eks_list) and any(s in instance_tag_ecs for s in self.supported_ecs_list):
                     if self.check_mw(self.env):
                         tag_list =  [{'Key': 'Patch Group','Value': self.env},{'Key': 'maintenance_window','Value': self.env+'_maintenance_window'}]
                     elif (self.env in self.supported_env_list):
@@ -137,7 +144,7 @@ class TagInstances(object):
             response = self.as_client.describe_auto_scaling_groups(AutoScalingGroupNames=[target_asg])
             exempt = False
             for tags in response['AutoScalingGroups'][0]['Tags']:
-                if (tags['Key'] == 'k8s.io/cluster-autoscaler/enabled' and tags['Value'] == 'TRUE') or (tags['Key'] == 'install_patch' and tags['Value'] == 'no'):
+                if (tags['Key'] == 'k8s.io/cluster-autoscaler/enabled' and tags['Value'] == 'TRUE') or (tags['Key'] == 'install_patch' and tags['Value'] == 'no') or (tags['Key'] == 'AmazonECSManaged'):
                     exempt = True
             if exempt==False:
                 self.env = 'null'

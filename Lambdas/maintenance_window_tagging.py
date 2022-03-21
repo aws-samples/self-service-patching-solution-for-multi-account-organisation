@@ -40,7 +40,8 @@ class TagInstances(object):
             self.include_asg = resource_properties['IncludeASG']
             self.supported_asg_list = ['null']
             self.supported_patch_list = ['null']            
-            self.supported_eks_list = ['null']            
+            self.supported_eks_list = ['null']
+            self.supported_ecs_list = ['null']            
             print("resource_properties", resource_properties)
         except Exception as exception:
             self.reason_data = "Missing required property %s" % exception
@@ -93,6 +94,7 @@ class TagInstances(object):
         instance_tag_asg = []
         instance_tag_patch = []
         instance_tag_eks = []
+        instance_tag_ecs = []
 
         for tags in instance_tags:
             tag_key_tmp = [r['Key'] for r in tags]
@@ -115,8 +117,12 @@ class TagInstances(object):
                 instance_tag_eks.append(tag_value_tmp[i])
             except:
                 instance_tag_eks.append('null')
-
-        return instance_id, instance_state, instance_tag_asg, instance_tag_patch, instance_tag_eks
+            try:
+                i = tag_key_tmp.index('AmazonECSManaged')
+                instance_tag_ecs.append('ecs')
+            except:
+                instance_tag_ecs.append('null')
+        return instance_id, instance_state, instance_tag_asg, instance_tag_patch, instance_tag_eks, instance_tag_ecs
 
     def filter_list(self, tmp_list, filter_list):
         filtered_list_indices=[]
@@ -146,17 +152,20 @@ class TagInstances(object):
                 self.as_client = boto3.client('autoscaling',region_name=region)                
                 instance_list = self.get_instance_list(env)
                 if instance_list != 'empty':
-                    [instance_id, instance_state, instance_tag_asg, instance_tag_patch, instance_tag_eks] = self.build_instance_list(instance_list)
+                    [instance_id, instance_state, instance_tag_asg, instance_tag_patch, instance_tag_eks, instance_tag_ecs] = self.build_instance_list(instance_list)
 
                     ind_state = self.filter_list(instance_state, self.supported_state_list)
                     ind_patch = self.filter_list(instance_tag_patch, self.supported_patch_list)
                     ind_asg = self.filter_list(instance_tag_asg, self.supported_asg_list)
                     ind_eks = self.filter_list(instance_tag_eks, self.supported_eks_list)
+                    ind_ecs = self.filter_list(instance_tag_ecs, self.supported_ecs_list)
 
                     ind_state_patch = list(set(ind_state).intersection(ind_patch))
                     ind_state_patch_asg = list(set(ind_state_patch).intersection(ind_asg))
                     ind_state_patch_asg_eks = list(set(ind_state_patch_asg).intersection(ind_eks))
-                    combined_ind = ind_state_patch_asg_eks
+                    ind_state_patch_asg_eks_ecs = list(set(ind_state_patch_asg_eks).intersection(ind_ecs))
+
+                    combined_ind = ind_state_patch_asg_eks_ecs
                     
                     filtered_instance_id = [instance_id[i] for i in combined_ind]
 
@@ -179,11 +188,13 @@ class TagInstances(object):
             response = self.as_client.describe_auto_scaling_groups()
             asg_name=[]
             for group in response['AutoScalingGroups']:
-                is_eks = False
+                is_exempt = False
                 for tags in group['Tags']:
                     if tags['Key'] == 'k8s.io/cluster-autoscaler/enabled' and tags['Value'] == 'TRUE':
-                        is_eks = True
-                if is_eks==False:
+                        is_exempt = True
+                    if tags['Key'] == 'AmazonECSManaged':
+                        is_exempt = True                        
+                if is_exempt==False:
                     for tags in group['Tags']:
                         if tags['Key'] == 'environment' and tags['Value'] == env:
                             asg_name.append(group['AutoScalingGroupName'])
