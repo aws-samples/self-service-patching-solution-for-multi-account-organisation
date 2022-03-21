@@ -15,7 +15,9 @@ def lambda_handler(event,context):
     env = event['env']
     TargetAccountsArray = sts.get_caller_identity()['Account']
     session = Session()
-    TargetRegionIdsArray = session.get_available_regions('ec2')
+    #TargetRegionIdsArray = session.get_available_regions('ec2')
+    regions = os.environ["WORKLOAD_REGIONS"]
+    TargetRegionIdsArray = regions.split(",")
     RunPatchBaselineOperation=event['patching_operation']
     RunPatchBaselineRebootOption=event['operation_post_patching']
     RunPatchBaselineInstallOverrideList=event['run_patch_baseline_install_override_list']

@@ -326,6 +326,7 @@ Resources:
           ADMINISTRATION_ROLE_NAME: !Ref AutomationAdministrationServiceRole
           EXECUTION_ROLE_NAME: !Ref AutomationExecutionServiceRole
           DOCUMENT_NAME: !Ref StandaloneEC2PatchDocument
+          WORKLOAD_REGIONS: !Ref WorkloadRegions
       Role: !GetAtt TaskLambdasRole.Arn
       Timeout: 900
       MemorySize: 128
