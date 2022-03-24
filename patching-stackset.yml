@@ -526,6 +526,15 @@ Resources:
             Resource: 
               - !Join [ '', ['arn:aws:s3:::', !Ref 'PatchingExecutionLogsBucketName'] ]
               - !Join [ '', ['arn:aws:s3:::', !Ref 'PatchingExecutionLogsBucketName', '/*'] ]
+      - PolicyName: InstallOverrideBucketPermission
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            Resource: 
+              - !Join [ '', ['arn:aws:s3:::', !Ref 'BaselineOverrideBucket', '/*'] ]
 
   InstanceProfileforPatching:
     Condition: CreateResources
