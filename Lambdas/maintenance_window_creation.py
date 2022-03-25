@@ -55,7 +55,10 @@ class CreateMaintenanceWindow(object):
 
     def create_maintenance_window_call(self,env,frequency,weekday,start_time,duration): 
         day_int = time.strptime(weekday, "%A").tm_wday
-        start_day = datetime.now() + timedelta( (day_int - datetime.now().weekday()) % 7 )
+        delta_to_start_day = timedelta( (day_int - datetime.now().weekday()) % 7 )
+        if str(delta_to_start_day) == '0:00:00':
+            delta_to_start_day = timedelta( (day_int - datetime.now().weekday() ) % 7 ) + timedelta(days=7)
+        start_day = datetime.now() + delta_to_start_day
         d_string = start_day.strftime("%Y-%m-%d")
         start_time = d_string+'T'+start_time+':00:00Z' 
         window_id = 'Not created'
