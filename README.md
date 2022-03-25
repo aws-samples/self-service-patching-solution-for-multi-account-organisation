@@ -6,6 +6,7 @@
 - [Deployment Instructions](#Deployment-Instructions)
     - [Prerequisites](#Prerequisites)
     - [Deployment Steps](#Deployment-Steps)
+- [Resources](#Resources)
 - [Usage](#Usage)
     - [Prerequisites](#Prerequisites)
     - [Steps](#Steps)
@@ -68,6 +69,35 @@
     8.	Click on Next.
     9.	Scroll down and select the check box “I acknowledge that AWS CloudFormation might create IAM resources with custom names”.
     10.	Click on Submit.
+
+# Resources
+There are two CloudFormation templatein the repository
+1. patching-stack.yml to be deployed in the central account
+    Resources created by this CloudFormation Template are listed below
+    1. PatchingPortfolio: AWS Service Catalog Portfolio for patching
+    2. AWS S3 Bucket for storing the managed instance inventory details
+    3. AWS S3 Bucket for storing the patching execution logs from all the instances in the child accounts
+    4. AWS S3 Bucket for storing patch list for InstallOverrideList functionality of Emergency patching
+    5. AWS Customer managed keys for encrypting the S3 bucket
+    6. AWS Glue database and crawler
+    7. AWS Step function state machine and lambda function for Emergency Patching
+    8. Amazon Athena Queries for extracting the compliance information
+
+2. patching-stackset.yml to be deployed across all the child accounts within the organization
+    Resources created by this CloudFormation Template are listed below
+    1. Default Patch maintenance window 
+    2. AWS Lambda function to carry out patching for standalone EC2 instances
+    3. AWS Lambda function to carry out patching of EC2 instances part of an AutoScaling Group
+    4. AWS Lambda function to initiate tagging for the relevant EC2 instance and AutoScaling Group
+    5. AWS System manager automation document to orchestrate patching of standalone EC2 instances
+    6. AWS System manager automation document to orchestrate patching of EC2 instances part of an AutoScaling Group
+    7. AWS System manager Patch baselines for different OS such as Amazon Linux2, windows, ubuntu, RedHat.
+    8. AWS System manager Resource data sync to collect inventory for managed instances and put it in central S3 bucket
+    9. AWS Config rule for monitoring tags related to patching solution
+    10. Amazon Event bridge rule to capture the tag non-compliance resulted from the config rule
+    11. AWS lambda function to remediating tag non-compliance.
+
+Note: You can navigate to Resources section in the deployed CloudFormation Template and check the exact names of the resources.
 
 # Usage
 
