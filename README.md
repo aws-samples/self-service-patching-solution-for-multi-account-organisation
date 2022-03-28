@@ -42,13 +42,14 @@
 ## Prerequisites
 1.	AWS Organization setup
 2.	AWS Config enabled in the child accounts
+3.  Delegated Administrator account for CloudFormation (if you are using any other account than organization payer)
 
 ## Deployment Steps
 1.	Clone the repository.
 2.	Upload the zip versions of the .py files and patching_window.template file to a S3 bucket.
 3.	Upload the patching-stack.yml file and deploy the CloudFormation template in master account
     1.	Provide a stack name.
-    2.	Specify the bucket, where you have uploaded the code.
+    2.	Specify the bucket, where you have uploaded the code. it can be a new bucket or existing bucket, make sure to update the bucket policy as per the policy provided in bucket-policy.json file in the repository.
     3.	Specify the Organization id.
         ![](images/Deploy-Stack-1.png)
     4.	Click on Next
