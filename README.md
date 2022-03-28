@@ -107,7 +107,7 @@ Note: You can navigate to Resources section in the deployed CloudFormation Templ
 1.	Active EC2 instances in the child accounts with Systems manager agent installed
 2.	Instance profile having access to Systems manager and central S3 bucket attached to the EC2 instances.An Instance Profile *"InstanceProfileforPatching"* is being created as part of the automation in all the child accounts with necessary privileges.
 3.	environment=<Dev/Test/Prod> tag attached to the instance based on the workload
-4.	Share the service catalog in the payer account across the organization.
+4.	Share the service catalog in the central account across the organization.
 
 ## Steps
 
@@ -171,8 +171,12 @@ This solution deploys a default maintenance window which covers the patching pro
 If there is a requirement for having a custom patch maintenance window, users can leverage service catalog product created as part of the implementation. 
 
 ### Share Service Catalog Portfolio
-From the Payer account follow the below steps to share the service catalog portfolio
-1.	Navigate to Service Catalog in the payer account
+From the Central account follow the below steps to share the service catalog portfolio, if you are using an AWS account other than Organization root account than you may need to register the account as delegated administrator for AWS Service Catalog, more information on this can be found in the AWS Documentation: https://docs.aws.amazon.com/servicecatalog/latest/adminguide/catalogs_portfolios_sharing_how-to-share.html#portfolio-sharing-organizations 
+Tip: AWS CLI command to register an account as delegated administrator for Service catalog
+```
+aws organizations register-delegated-administrator --account-id <provide-your-account-id> --service-principal servicecatalog.amazonaws.com
+```
+1.	Navigate to Service Catalog in the Central account
 2.	Click on Portfolios and click on Patching portfolio
 3.	Click on Share
     ![](images/Share-Service-Catalog-1.png)
