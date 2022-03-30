@@ -28,7 +28,7 @@
     - [QuickSight Dashboard](#QuickSight-Dashboard)
 - [Tear-down Instructions](#tear-down-instructions)
     - [Remove resources from the Child Accounts](#Remove-resources-from-the-Child-Accounts)
-    - [Remove resources from the Payer Account](#Remove-resources-from-the-Payer-Account)
+    - [Remove resources from the central Account](#Remove-resources-from-the-central-Account)
 - [Referrences](#Referrences)
 - [Pricing](#Pricing)
 
@@ -158,7 +158,7 @@ Sample payload:
 ```
 Detail description of the parameters have been mentioned in [Launch Service Catalog Product](#Launch-Service-Catalog-Product) section
 
-2. The state machine triggers a lambda function in the payer account which fetches the child account details in the organization, assumes a role into the child accounts and invokes the orchestrator lambda functions for patching.
+2. The state machine triggers a lambda function in the central account which fetches the child account details in the organization, assumes a role into the child accounts and invokes the orchestrator lambda functions for patching.
 
 Note: You can integrate a manual approval stage to the Step function as mentioned in the user guide doc: https://docs.aws.amazon.com/step-functions/latest/dg/tutorial-human-approval.html, AWS Step function will pause for an approval and proceed after the flow is approved.
 
@@ -292,7 +292,7 @@ QueryInstanceList : Get the list of instances across different accounts and regi
 PatchComplianceReport : Get list of compliant and non-complant patch inventory along with instance, account, region, platform details.
 
 Steps:
-1.	Navigate to Athena Console in the payer account
+1.	Navigate to Athena Console in the central account
 2.	Select Saved queries and search for “PatchComplianceReport”
 3.	Select the Database “managed_instances_database”.
 4.	Click on Run
@@ -337,7 +337,7 @@ Steps:
 
 ## Remove resources from the Child Accounts
 
-1. In the Payer account, Navigate to CloudFormation console.
+1. In the Central account, Navigate to CloudFormation console.
 2. Go to Stacksets
 3. Search for the Stackset deployed for patching
 4. Click on Actions
@@ -345,17 +345,16 @@ Steps:
 6. Provide AWS Organization Id
 7. Specify the regions from which you want to delete the stacksets
 8. Click Next and Click on Submit, this will delete the stacks from all the child accounts.
-9. To delete the stackset, search for the stackset in the payer accout
+9. To delete the stackset, search for the stackset in the Central accout
 10. Go to Action, delete stackset
 
-## Remove resources from the Payer Account
+## Remove resources from the central Account
 
-1. In the payer account, Navigate to CloudFormation console
-2. Go to Stacks
+1. In the central account, empty the S3 buckets created as part of the deployment.
+   You can get the S3 bucket details from the resources section in the CloudFormations Stack
+2. Navigate to CloudFormation console, Go to Stacks
 3. Select the stacks related to patching
 4. Click on delete
-5. Make sure to empty the S3 buckets created as part of the deployment as a prerequisite.
-
 
 # Referrences:
 
