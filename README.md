@@ -262,14 +262,15 @@ Based on the *environment* tag on the EC2 instance/AutoScaling group below patch
 
 An AWS config rule checks for the tag compliance in each of the child accounts. An Event bridge rule listens for compliance change and triggers lambda function. The lambda function does the following:
 
-1.	For EC2 instances:
-    1. It checks for the Autoscaling tag key (aws:autoscaling:groupName), EKS tag key (Alpha.eksctl.io/nodegroup-name), exception tag (patch_install=no)
-    2. If any of the tags found, the lambda function does nothing
-    3. If none of the tags found, the lambda function verifies the patch maintenance window and applies the patch tags accordingly.
+1. For EC2 instances:
+    1. It checks for the Autoscaling tag key (aws:autoscaling:groupName), EKS tag key (Alpha.eksctl.io/nodegroup-name), ECS tag key          (AmazonECSManaged), exception tag (patch_install=no)
+    2. If any of the tags found, the lambda function does not perform any action.
+    3. If none of the tags found, the lambda function verifies the environment tag, patch maintenance window and applies the patch tags accordingly.
 2.	For AutoScaling Group:
-    1. It checks for the EKS tag (k8s.io/cluster-autoscaler/enabled=TRUE) and exception tag (patch_install=no)
-    2. If any of the tags found, the lambda function does nothing
-    3. If none of the tags found, the lambda function verifies the patch maintenance window and applies the patch tags accordingly.
+    1. It checks for the EKS tag (k8s.io/cluster-autoscaler/enabled=true), ECS tag (AmazonECSManaged) and exception tag (patch_install=no)
+    2. If any of the tags found, the lambda function does not perform any action.
+    3. If none of the tags found, the lambda function verifies the environment tag, patch maintenance window and applies the patch tags accordingly.
+
 
 # Compliance Reporting
 
