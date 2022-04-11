@@ -43,8 +43,6 @@ class PatchingASG(object):
         regions = os.environ["WORKLOAD_REGIONS"]
         self.regions = regions.split(",")
         self.accounts_id = sts_client.get_caller_identity()['Account']
-        # session = Session()
-        # self.regions = session.get_available_regions('ec2')
         self.target_location_max_concurrency='1'
         self.target_location_max_errors='1'        
         try:
@@ -65,29 +63,32 @@ class PatchingASG(object):
             response = self.as_client.describe_auto_scaling_groups(MaxRecords=100)
             asg_name=[]
             subnet_id = []
-            launch_config_name=[]
             image_id = []
             sg_id = []
 
             for group in response['AutoScalingGroups']:
+                failed = False
                 for tags in group['Tags']:
                     if tags['Key'] == 'maintenance_window' and tags['Value'] == env+'_maintenance_window':
-                        asg_name.append(group['AutoScalingGroupName'])
+                        asg_name_tmp = group['AutoScalingGroupName']
                         subnet_tmp = group['VPCZoneIdentifier']
                         try:
                             subnet_tmp = subnet_tmp.split(',')[0]
                         except Exception as exp:
                             print(str(exp))
-                        subnet_id.append(subnet_tmp)
+                            failed = True 
                         try:
-                            launch_config_name.append(group['LaunchConfigurationName'])
-                            image_id.append(self.as_client.describe_launch_configurations(LaunchConfigurationNames=[group['LaunchConfigurationName']])['LaunchConfigurations'][0]['ImageId'])
+                            image_id_tmp = self.as_client.describe_launch_configurations(LaunchConfigurationNames=[group['LaunchConfigurationName']])['LaunchConfigurations'][0]['ImageId']
                         except Exception as exp:
-                            print('Launch configuration not found')
-                            launch_template = group['LaunchTemplate']['LaunchTemplateId']
-                            launch_template_version = group['LaunchTemplate']['Version']
-                            response = self.ec2_client.describe_launch_template_versions(LaunchTemplateId=launch_template,Versions=[launch_template_version])
-                            image_id.append(response['LaunchTemplateVersions'][0]['LaunchTemplateData']['ImageId'])
+                            print('Launch configuration not found '+str(exp))
+                            try:
+                                launch_template = group['LaunchTemplate']['LaunchTemplateId']
+                                launch_template_version = group['LaunchTemplate']['Version']
+                                response = self.ec2_client.describe_launch_template_versions(LaunchTemplateId=launch_template,Versions=[launch_template_version])
+                                image_id_tmp = response['LaunchTemplateVersions'][0]['LaunchTemplateData']['ImageId']
+                            except Exception as exp:
+                                print('Launch template not found '+str(exp))
+                                failed = True 
                         response = self.ec2_client.describe_subnets(SubnetIds=[subnet_tmp])
                         vpc_id = response['Subnets'][0]['VpcId']
                         try: 
@@ -122,15 +123,24 @@ class PatchingASG(object):
                                             }],
                                         'ToPort': -1
                                     }])
-                            sg_id.append(sg_id_tmp)
+                            sg_id_tmp_append = sg_id_tmp
                         except Exception as exp:
                             print('No Patching SG ' +str(exp))
-                            response = self.ec2_client.create_security_group(
-                                Description='Security Group for Patching ASGs',
-                                GroupName='ASGPatchingSG',
-                                VpcId=vpc_id
-                            )
-                            sg_id.append(response['GroupId'])
+                            try:
+                                response = self.ec2_client.create_security_group(
+                                    Description='Security Group for Patching ASGs',
+                                    GroupName='ASGPatchingSG',
+                                    VpcId=vpc_id
+                                )
+                                sg_id_tmp_append = response['GroupId']
+                            except Exception as exp:
+                                print('Failed creating patching SG ' +str(exp))
+                                failed = True 
+                        if failed==False:
+                            asg_name.append(asg_name_tmp)
+                            subnet_id.append(subnet_tmp)
+                            image_id.append(image_id_tmp)
+                            sg_id.append(sg_id_tmp_append)
 
             return asg_name, subnet_id, image_id, sg_id
 

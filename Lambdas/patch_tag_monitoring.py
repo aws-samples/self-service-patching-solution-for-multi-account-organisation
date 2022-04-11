@@ -81,7 +81,22 @@ class TagInstances(object):
         except:
             instance_tag_patch.append('null')
         try:
-            i = tag_key_tmp.index('Alpha.eksctl.io/nodegroup-name')
+            i = tag_key_tmp.index('Alpha.eksctl.io/')
+            instance_tag_eks.append(tag_value_tmp[i])
+        except:
+            instance_tag_eks.append('null')
+        try:
+            i = tag_key_tmp.index('k8s.io/')
+            instance_tag_eks.append(tag_value_tmp[i])
+        except:
+            instance_tag_eks.append('null')
+        try:
+            i = tag_key_tmp.index('eks:')
+            instance_tag_eks.append(tag_value_tmp[i])
+        except:
+            instance_tag_eks.append('null')
+        try:
+            i = tag_key_tmp.index('kubernetes.io/')
             instance_tag_eks.append(tag_value_tmp[i])
         except:
             instance_tag_eks.append('null')
@@ -144,11 +159,11 @@ class TagInstances(object):
             response = self.as_client.describe_auto_scaling_groups(AutoScalingGroupNames=[target_asg])
             exempt = False
             for tags in response['AutoScalingGroups'][0]['Tags']:
-                if (tags['Key'] == 'k8s.io/cluster-autoscaler/enabled' and tags['Value'] == 'TRUE') or (tags['Key'] == 'install_patch' and tags['Value'] == 'no') or (tags['Key'] == 'AmazonECSManaged'):
+                if ('k8s.io/' in tags['Key']) or ('eks:' in tags['Key']) or ('kubernetes.io/' in tags['Key']) or (tags['Key'] == 'install_patch' and tags['Value'].lower() == 'no')  or ('ecs' in tags['Key']) or ('ECS' in tags['Key']) or ('ecs' in tags['Value']) or ('ECS' in tags['Value']):
                     exempt = True
             if exempt==False:
                 self.env = 'null'
-                for tags in response['AutoScalingGroups'][0]['Tags']:                       
+                for tags in response['AutoScalingGroups'][0]['Tags']:
                     if tags['Key'] == 'environment' and tags['Value'] in self.supported_env_list:
                         self.env = tags['Value']
                      

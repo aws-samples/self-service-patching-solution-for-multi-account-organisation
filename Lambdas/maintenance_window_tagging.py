@@ -113,7 +113,22 @@ class TagInstances(object):
             except:
                 instance_tag_patch.append('null')
             try:
-                i = tag_key_tmp.index('Alpha.eksctl.io/nodegroup-name')
+                i = tag_key_tmp.index('Alpha.eksctl.io/')
+                instance_tag_eks.append(tag_value_tmp[i])
+            except:
+                instance_tag_eks.append('null')
+            try:
+                i = tag_key_tmp.index('k8s.io/')
+                instance_tag_eks.append(tag_value_tmp[i])
+            except:
+                instance_tag_eks.append('null')
+            try:
+                i = tag_key_tmp.index('eks:')
+                instance_tag_eks.append(tag_value_tmp[i])
+            except:
+                instance_tag_eks.append('null')
+            try:
+                i = tag_key_tmp.index('kubernetes.io/')
                 instance_tag_eks.append(tag_value_tmp[i])
             except:
                 instance_tag_eks.append('null')
@@ -190,10 +205,8 @@ class TagInstances(object):
             for group in response['AutoScalingGroups']:
                 is_exempt = False
                 for tags in group['Tags']:
-                    if tags['Key'] == 'k8s.io/cluster-autoscaler/enabled' and tags['Value'] == 'TRUE':
+                    if ('k8s.io/' in tags['Key']) or ('eks:' in tags['Key']) or ('kubernetes.io/' in tags['Key']) or (tags['Key'] == 'install_patch' and tags['Value'].lower() == 'no')  or ('ecs' in tags['Key']) or ('ECS' in tags['Key']) or ('ecs' in tags['Value']) or ('ECS' in tags['Value']):
                         is_exempt = True
-                    if tags['Key'] == 'AmazonECSManaged':
-                        is_exempt = True                        
                 if is_exempt==False:
                     for tags in group['Tags']:
                         if tags['Key'] == 'environment' and tags['Value'] == env:
