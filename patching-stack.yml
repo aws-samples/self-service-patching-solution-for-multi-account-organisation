@@ -231,7 +231,7 @@ Resources:
                 Action:
                   - organizations:ListRoots
                   - organizations:ListAccounts
-                Resource: "*"
+                Resource: !Sub arn:aws:organizations::${AWS::AccountId}:organization/${OrgID}
         - PolicyName: AssumeRole
           PolicyDocument:
             Version: 2012-10-17
@@ -239,7 +239,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - sts:AssumeRole
-                Resource: !Sub arn:aws:iam::*:role/EmergencyPatchingRole
+                Resource: !Sub arn:aws:iam::*:role/${EmergencyPatchingRole}
 
   EmergencyPatchingFunction:
     Type: AWS::Lambda::Function
@@ -514,6 +514,7 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt DeleteGlueColumnFunctionEventRule.Arn
+
 # Athena resources
   AthenaQueryResultsBucket:
     Type: AWS::S3::Bucket
@@ -539,6 +540,21 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+
+  AthenaQueryResultsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AthenaQueryResultsBucket
+      PolicyDocument:
+        Statement:
+        - Sid: AthenaQuery
+          Effect: Allow
+          Principal:
+            Service: athena.amazonaws.com
+          Action: 
+          - s3:GetObject
+          - s3:PutObject
+          Resource: !Sub arn:aws:s3:::${AthenaQueryResultsBucket}/*
 
   AthenaQueryNonCompliantPatch:
     Type: AWS::Athena::NamedQuery
