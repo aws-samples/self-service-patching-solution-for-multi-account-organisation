@@ -263,18 +263,18 @@ Based on the *environment* tag on the EC2 instance/AutoScaling group below patch
 An AWS config rule checks for the tag compliance in each of the child accounts. An Event bridge rule listens for compliance change and triggers lambda function. The lambda function does the following:
 
 1. For EC2 instances:
-    1. It checks for the Autoscaling tag key (aws:autoscaling:groupName), EKS tag key (Alpha.eksctl.io/nodegroup-name), ECS tag key          (AmazonECSManaged), exception tag (patch_install=no)
+    1. It checks for the Autoscaling tag key (aws:autoscaling:groupName), EKS tag key (Alpha.eksctl.io/nodegroup-name/ OR k8s.io/* OR kubernetes.io/*), ECS tag key (AmazonECSManaged), exception tag (patch_install=no)
     2. If any of the tags found, the lambda function does not perform any action.
     3. If none of the tags found, the lambda function verifies the environment tag, patch maintenance window and applies the patch tags accordingly.
 2.	For AutoScaling Group:
-    1. It checks for the EKS tag (k8s.io/cluster-autoscaler/enabled=true), ECS tag (AmazonECSManaged) and exception tag (patch_install=no)
+    1. It checks for the EKS tag (k8s.io/cluster-autoscaler/enabled OR kubernetes.io/*), ECS tag (AmazonECSManaged) and exception tag (patch_install=no)
     2. If any of the tags found, the lambda function does not perform any action.
     3. If none of the tags found, the lambda function verifies the environment tag, patch maintenance window and applies the patch tags accordingly.
 
 
 # Compliance Reporting
 
-Individual child accounts can view patch compliance status of their EC2 workload in the Systems manager patch manager dashboard. However currently there is no automated out-of-box dashboard available for the central account to consolidate compliance status of all the child accounts.
+Individual child accounts can view patch compliance status of their EC2 workload in the Systems manager patch manager dashboard.
 AWS resource data sync collects detailed inventory (https://docs.aws.amazon.com/systems-manager/latest/userguide/systems-manager-inventory.html) of the EC2 instances in the child accounts and sends to the central S3 bucket, which then can be consumed with services like AWS Glue, Amazon Athena and Amazon Quicksight to create compliance dashboards for the central team.
 
 1. The State Manager Association triggers everyday to gather software inventory data.
