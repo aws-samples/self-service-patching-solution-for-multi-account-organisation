@@ -22,8 +22,6 @@ class EmergencyPatching(object):
             global session
             session = boto3.session.Session()
             self.organizations_client = session.client('organizations')
-            root_ou_id = self.organizations_client.list_roots()
-            self.root_ou_id = (root_ou_id['Roots'][0]['Id'])
             self.task_lambda_name = os.environ["TASK_LAMBDA_NAME"] 
             self.asg_task_lambda_name = os.environ["ASG_TASK_LAMBDA_NAME"] 
             self.patching_template_region = os.environ["PATCHING_TEMPLATE_REGION"]
