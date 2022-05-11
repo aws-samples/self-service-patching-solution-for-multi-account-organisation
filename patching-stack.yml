@@ -239,7 +239,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - sts:AssumeRole
-                Resource: !Sub arn:aws:iam::*:role/${EmergencyPatchingRole}
+                Resource: arn:aws:iam::*:role/EmergencyPatchingRole
 
   EmergencyPatchingFunction:
     Type: AWS::Lambda::Function
