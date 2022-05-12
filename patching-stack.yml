@@ -28,6 +28,9 @@ Parameters:
 
 Resources:
 # Managed inventory resources
+# Best practices document for KMS : https://docs.aws.amazon.com/whitepapers/latest/kms-best-practices/key-policies.html 
+                                    # https://docs.aws.amazon.com/whitepapers/latest/kms-best-practices/least-privilege-separation-of-duties.html 
+                                    # https://docs.aws.amazon.com/kms/latest/developerguide/monitoring-overview.html 
   ManagedInstancesDataEncryptionKey:
     Type: AWS::KMS::Key
     Properties:
@@ -139,6 +142,8 @@ Resources:
 
 # Patching resources
   PatchingExecutionLogsBucket:
+  # please make sure to follow best practices reccommended by AWS for creating S3 buckets
+  # https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html  
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'patching-execution-logs-${AWS::Region}-${AWS::AccountId}'
@@ -242,6 +247,8 @@ Resources:
                 Resource: arn:aws:iam::*:role/EmergencyPatchingRole
 
   EmergencyPatchingFunction:
+  # Best practices for working with AWS Lambda Functions: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  # tracing and visulaizing Lambda functions with AWS x-ray: https://docs.aws.amazon.com/lambda/latest/dg/services-xray.html
     Type: AWS::Lambda::Function
     Properties:
       Code:
@@ -317,6 +324,8 @@ Resources:
       RoleArn: !GetAtt EmergencyPatchingStateMachineRole.Arn
 
   PatchBaselineOverrideBucket:
+  # please make sure to follow best practices reccommended by AWS for creating S3 buckets
+  # https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html 
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'patch-baseline-override-${AWS::Region}-${AWS::AccountId}'
@@ -442,6 +451,8 @@ Resources:
                     - !Sub arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/${GlueDatabase}/aws_instanceinformation
 
   DeleteGlueColumnFunction:
+  # Best practices for working with AWS Lambda Functions: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
+  # tracing and visulaizing Lambda functions with AWS x-ray: https://docs.aws.amazon.com/lambda/latest/dg/services-xray.html
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: DeleteGlueColumnFunction

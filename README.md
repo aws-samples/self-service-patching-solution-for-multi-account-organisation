@@ -367,6 +367,14 @@ Steps:
 
 [Understanding AWS Systems Manager Inventory Metadata](https://aws.amazon.com/blogs/mt/understanding-aws-systems-manager-inventory-metadata/)
 
+## Best Practice documentation:
+
+[Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html)
+
+[AWS Lambda](https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html)
+
+[AWS KMS](https://docs.aws.amazon.com/whitepapers/latest/kms-best-practices/key-policies.html )
+
 # Pricing:
 
 [AWS Systems Manager](https://aws.amazon.com/systems-manager/pricing/)
