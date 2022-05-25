@@ -108,6 +108,9 @@ Note: You can navigate to Resources section in the deployed CloudFormation Templ
 2.	Instance profile having access to Systems manager and central S3 bucket attached to the EC2 instances.An Instance Profile *"InstanceProfileforPatching"* is being created as part of the automation in all the child accounts with necessary privileges.
 3.	environment=<Dev/Test/Prod> tag attached to the instance based on the workload
 4.	Share the service catalog in the central account across the organization.
+5.  If you are using any AWS account other than Organization root account as Central account for patching, please make sure to configure the central account as delegated administrator for 
+Account management: https://docs.aws.amazon.com/accounts/latest/reference/using-orgs-delegated-admin.html 
+"Service Catalog": https://docs.aws.amazon.com/servicecatalog/latest/adminguide/catalogs_portfolios_sharing_how-to-share.html#portfolio-sharing-organizations 
 
 ## Steps
 

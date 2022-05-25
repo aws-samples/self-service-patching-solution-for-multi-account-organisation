@@ -236,7 +236,7 @@ Resources:
                 Action:
                   - organizations:ListRoots
                   - organizations:ListAccounts
-                Resource: !Sub arn:aws:organizations::${AWS::AccountId}:organization/${OrgID}
+                Resource: "*"
         - PolicyName: AssumeRole
           PolicyDocument:
             Version: 2012-10-17
