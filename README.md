@@ -48,28 +48,37 @@
 1.	Clone the repository.
 2.	Upload the zip versions of the .py files and patching_window.template file to a S3 bucket.
 3.	Upload the patching-stack.yml file and deploy the CloudFormation template in master account
-    1.	Provide a stack name.
-    2.	Specify the bucket, where you have uploaded the code. it can be a new bucket or existing bucket, make sure to update the bucket policy as per the policy provided in bucket-policy.json file in the repository.
-    3.	Specify the Organization id.
+    1. Navigate to CloudFormation in the AWS Console.
+    2. Click on Create stack and click “with new resources(standard)”
+    3. Under the Specify template section, click on Upload a template file
+    4. Click on Choose file and select patching-stack.yml
+	5. Provide a stack name(example: “self-service-patching-stack”)
+    6.	Specify the bucket, where you have uploaded the code. it can be a new bucket or existing bucket, make sure to update the bucket policy as per the policy provided in bucket-policy.json file in the repository.
+    7.	Specify the Organization id.
         ![](images/Deploy-Stack-1.png)
-    4.	Click on Next
-    5.	Hit Next and check “I acknowledge that AWS CloudFormation might create IAM resources with custom names”
-    6.	Click on “Create Stack”.
-4.  Deploy patching-stackset.yml in child accounts as stack or stackset
-    1.	Enter a name for the StackSet.
+    8.	Click on Next
+    9.	Hit Next and check “I acknowledge that AWS CloudFormation might create IAM resources with custom names”
+    10.	Click on “Create Stack”.
+4.  Deploy patching-stackset.yml in child accounts as stackset
+    1. Navigate to CloudFormation in the AWS console and click on StackSets
+    2. Click on Create StackSet and click on “Service-managed permissions”
+    3. Under the Specify template section, click on Upload a template file
+    4. Click on Choose file and select patching-stackset.yml
+    5. Enter a name for the StackSet (example: self-service-patching-stackset)
         ![](images/Deploy_stackset_Step4-a.png)
-    2.	Navigate to the Outputs section of the stack launched in step-3 and fetch the below information.
+    6.	Navigate to the Outputs section of the stack launched in step-3 and fetch the below information.
         ![](images/Deploy_stackset_Step4-b.png)
-    3.  Specify the regions separated by comma, in which you have EC2 workload
-    4.	Click Next
-    5.	Click Next
-    6.	Select Deployment target as “Deploy to organization”
+    7.  Specify the regions separated by comma, in which you have EC2 workload
+    8.	Click Next
+    9.	Click Next
+    10.	Select Deployment target as “Deploy to organization”
         ![](images/Deploy_stackset_Step4-c.png)
     
-    7.	Select all the regions you want to cover.
-    8.	Click on Next.
-    9.	Scroll down and select the check box “I acknowledge that AWS CloudFormation might create IAM resources with custom names”.
-    10.	Click on Submit.
+    11.	Select all the regions you want to cover.
+    12.	Click on Next.
+    13.	Scroll down and select the check box “I acknowledge that AWS CloudFormation might create IAM resources with custom names”.
+    14.	Click on Submit and navigate to the Stack instances tab in the StackSet
+    15. Monitor the status column and wait till Status of all the Stack instances change to CURRENT
 
 # Resources
 There are two CloudFormation templatein the repository
