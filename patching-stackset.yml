@@ -302,8 +302,8 @@ Resources:
               - logs:CreateLogStream
               - logs:PutLogEvents
               Resource:
-                Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/MaintenanceWindowTaskFunction:*
-                Fn::Sub: arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/MaintenanceWindowASGTaskFunction:*
+                - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/MaintenanceWindowTaskFunction:*
+                - !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/MaintenanceWindowASGTaskFunction:*
               Effect: Allow
         - PolicyName: UpdateCreateSGs
           PolicyDocument:
