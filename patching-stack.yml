@@ -35,7 +35,7 @@ Resources:
 # Best practices document for KMS : https://docs.aws.amazon.com/whitepapers/latest/kms-best-practices/key-policies.html
                                     # https://docs.aws.amazon.com/whitepapers/latest/kms-best-practices/least-privilege-separation-of-duties.html
                                     # https://docs.aws.amazon.com/kms/latest/developerguide/monitoring-overview.html
-  ManagedInstancesDataEncryptionKey:
+  EncryptionKeyforManagedInstancesData:
     Type: AWS::KMS::Key
     Properties:
       Description: Key used to encrypt instance data
