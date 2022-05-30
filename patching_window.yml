@@ -1,0 +1,196 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Product for maintenance window creation
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Instances Details
+        Parameters:
+          - Environment
+          - PatchingFrequency
+          - PatchingWindowWeekday
+          - PatchingWindowStartTime
+          - PatchingWindowDuration
+          - PatchingOperation
+          - OperationPostPatching
+      - Label:
+          default: Autoscaling Group Details
+        Parameters:
+          - IncludeASG
+          - RetainHealthyPercentage
+          - RefreshASGInstances
+    ParameterLabels:
+      Environment:
+        default: 'Select the environment tag attached to the instances:'
+      PatchingFrequency:
+        default: 'Select the frequency of patching applied:'
+      PatchingWindowWeekday:
+        default: 'Enter the day of the week of the patching window:'
+      PatchingWindowStartTime:
+        default: 'Enter the start time of the patching window in UTC:'
+      PatchingWindowDuration:
+        default: 'Enter the duration of the patching window in hours:'
+      IncludeASG:
+        default: 'Select if to include Auto Scaling Groups:'
+      RetainHealthyPercentage:
+        default: 'Enter the percentage of remaining healthy intances during patching
+          (0-90%):'
+      RefreshASGInstances:
+        default: 'Select if to refresh the instances in the ASG after updating the
+          launch configuration:'
+      PatchingOperation:
+        default: 'Select the patching operation:'
+      OperationPostPatching:
+        default: 'Select the instance operation post patching:'
+Parameters:
+  Environment:
+    Description: Type of Environment
+    Type: String
+    AllowedValues:
+      - Dev
+      - Test
+      - Prod
+  PatchingFrequency:
+    Description: Frequency of patching in days
+    Type: Number
+    AllowedValues:
+      - 7
+      - 14
+      - 21
+      - 28
+      - 35
+      - 42
+    Default: 7
+  PatchingWindowWeekday:
+    Description: 'Enter the day of the week of the patching window:'
+    Type: String
+    AllowedValues:
+      - Monday
+      - Tuesday
+      - Wednesday
+      - Thursday
+      - Friday
+      - Saturday
+      - Sunday
+    Default: Friday
+  PatchingWindowStartTime:
+    Description: 'Enter the start time of the patching window in UTC:'
+    Type: String
+    AllowedValues:
+      - '01'
+      - '02'
+      - '03'
+      - '04'
+      - '05'
+      - '06'
+      - '07'
+      - '08'
+      - '09'
+      - '10'
+      - '11'
+      - '12'
+      - '13'
+      - '14'
+      - '15'
+      - '16'
+      - '17'
+      - '18'
+      - '19'
+      - '20'
+      - '21'
+      - '22'
+      - '23'
+    Default: '05'
+  PatchingWindowDuration:
+    Type: Number
+    MinValue: 1
+    MaxValue: 23
+    ConstraintDescription: Enter a number bewtween 1 - 23
+    Description: Patching window duration in hours
+    Default: 4
+  IncludeASG:
+    Type: String
+    AllowedValues:
+      - 'Yes'
+      - 'No'
+    Default: 'No'
+    ConstraintDescription: 'Choose a valid option '
+    Description: Include Auto Scaling Groups?
+  RetainHealthyPercentage:
+    Type: Number
+    MinValue: 10
+    MaxValue: 90
+    Default: 10
+    ConstraintDescription: Enter a number bewtween 10 - 90
+    Description: Percentage of remaining healthy intances during patching (10-90%)
+  RefreshASGInstances:
+    Type: String
+    AllowedValues:
+      - 'Yes'
+      - 'No'
+    Default: 'Yes'
+    ConstraintDescription: 'Choose a valid option '
+    Description: Select if to refresh the instances in the ASG after updating the
+      launch configuration
+  PatchingOperation:
+    Type: String
+    AllowedValues:
+      - Scan
+      - Install
+    Default: Install
+    Description: Patching operation
+  OperationPostPatching:
+    Type: String
+    AllowedValues:
+      - RebootIfNeeded
+      - NoReboot
+    Default: RebootIfNeeded
+    Description: Instance operation post patching
+Resources:
+  EC2Tagging:
+    Type: Custom::EC2Tagging
+    Properties:
+      Environment: !Ref 'Environment'
+      PatchingFrequency: !Ref 'PatchingFrequency'
+      PatchingWindowWeekday: !Ref 'PatchingWindowWeekday'
+      PatchingWindowStartTime: !Ref 'PatchingWindowStartTime'
+      PatchingWindowDuration: !Ref 'PatchingWindowDuration'
+      IncludeASG: !Ref 'IncludeASG'
+      RetainHealthyPercentage: !Ref 'RetainHealthyPercentage'
+      RefreshASGInstances: !Ref 'RefreshASGInstances'
+      PatchingOperation: !Ref 'PatchingOperation'
+      OperationPostPatching: !Ref 'OperationPostPatching'
+      ServiceToken: !Join
+        - ''
+        - - 'arn:aws:lambda:'
+          - !Ref 'AWS::Region'
+          - ':'
+          - !Ref 'AWS::AccountId'
+          - :function:MaintenanceWindowTaggingFunction
+    UpdateReplacePolicy: Retain
+  MaintenanceWindow:
+    Type: Custom::MaintenanceWindow
+    Properties:
+      Environment: !Ref 'Environment'
+      PatchingFrequency: !Ref 'PatchingFrequency'
+      PatchingWindowWeekday: !Ref 'PatchingWindowWeekday'
+      PatchingWindowStartTime: !Ref 'PatchingWindowStartTime'
+      PatchingWindowDuration: !Ref 'PatchingWindowDuration'
+      IncludeASG: !Ref 'IncludeASG'
+      RetainHealthyPercentage: !Ref 'RetainHealthyPercentage'
+      RefreshASGInstances: !Ref 'RefreshASGInstances'
+      PatchingOperation: !Ref 'PatchingOperation'
+      OperationPostPatching: !Ref 'OperationPostPatching'
+      ServiceToken: !Join
+        - ''
+        - - 'arn:aws:lambda:'
+          - !Ref 'AWS::Region'
+          - ':'
+          - !Ref 'AWS::AccountId'
+          - :function:MaintenanceWindowCreationFunction
+    UpdateReplacePolicy: Retain
+Outputs:
+  TaggingStatus:
+    Value: !GetAtt 'EC2Tagging.TaggingStatus'
+  WindowId:
+    Value: !GetAtt 'MaintenanceWindow.WindowId'

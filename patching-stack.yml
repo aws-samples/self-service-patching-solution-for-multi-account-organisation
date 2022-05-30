@@ -17,7 +17,7 @@
 #  *
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: AWS CloudFormation template to create a scheduled multi-account and multi-region Automation patching operation.
+Description: AWS CloudFormation template to create a scheduled multi-account and multi-region Automation patching operation. **WARNING** This template creates KMS key and related resources. You will be billed for the AWS resources used if you create a stack from this template.
 Parameters:
   ArtifactBucket:
     Type: String
