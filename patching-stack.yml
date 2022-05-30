@@ -31,7 +31,7 @@ Resources:
 # Best practices document for KMS : https://docs.aws.amazon.com/whitepapers/latest/kms-best-practices/key-policies.html 
                                     # https://docs.aws.amazon.com/whitepapers/latest/kms-best-practices/least-privilege-separation-of-duties.html 
                                     # https://docs.aws.amazon.com/kms/latest/developerguide/monitoring-overview.html 
-  ManagedInstancesDataEncryptionKey:
+  EncryptionKeyforManagedInstancesData:
     Type: AWS::KMS::Key
     Properties:
       Description: Key used to encrypt instance data
@@ -70,11 +70,11 @@ Resources:
             StringEquals:
               aws:PrincipalOrgID: !Ref OrgID          
 
-  ManagedInstancesDataEncryptionKeyAlias:
+  EncryptionKeyforManagedInstancesDataAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: alias/ManagedInstancesDataEncryptionKey
-      TargetKeyId: !Ref ManagedInstancesDataEncryptionKey
+      AliasName: alias/EncryptionKeyforManagedInstancesData
+      TargetKeyId: !Ref EncryptionKeyforManagedInstancesData
 
   ManagedInstancesDataBucket:
     Type: AWS::S3::Bucket
@@ -86,7 +86,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              KMSMasterKeyID: !Ref ManagedInstancesDataEncryptionKey
+              KMSMasterKeyID: !Ref EncryptionKeyforManagedInstancesData
               SSEAlgorithm: aws:kms
       LifecycleConfiguration: 
         Rules:
@@ -124,7 +124,7 @@ Resources:
           Condition:
             StringEquals:
               s3:x-amz-server-side-encryption: aws:kms
-              s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt ManagedInstancesDataEncryptionKey.Arn
+              s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt EncryptionKeyforManagedInstancesData.Arn
         - Sid: SSMBucketDeliveryTagging
           Effect: Allow
           Principal:
@@ -194,7 +194,7 @@ Resources:
       ProvisioningArtifactParameters:
         - Info:
             LoadTemplateFromURL: !Sub
-              - 'https://${bucket}.s3.amazonaws.com/patching_window.template'
+              - 'https://${bucket}.s3.amazonaws.com/patching_window.yml'
               - bucket: !Ref ArtifactBucket
           Name: 'v1'
       Name: Patching maintenance window product
@@ -420,7 +420,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - kms:Decrypt
-                Resource: !GetAtt ManagedInstancesDataEncryptionKey.Arn
+                Resource: !GetAtt EncryptionKeyforManagedInstancesData.Arn
   DeleteGlueColumnRole:
       Type: AWS::IAM::Role
       Properties:
@@ -535,7 +535,7 @@ Resources:
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              KMSMasterKeyID: !Ref ManagedInstancesDataEncryptionKey
+              KMSMasterKeyID: !Ref EncryptionKeyforManagedInstancesData
               SSEAlgorithm: aws:kms
       LifecycleConfiguration: 
         Rules:
@@ -642,4 +642,4 @@ Outputs:
     Value: !Ref "AWS::Region"
   ManagedInstancesDataEncryptionKey:
     Description: The ARN of the KMS key used to encrypt resource data sync logs.
-    Value: !GetAtt ManagedInstancesDataEncryptionKey.Arn
+    Value: !GetAtt EncryptionKeyforManagedInstancesData.Arn
