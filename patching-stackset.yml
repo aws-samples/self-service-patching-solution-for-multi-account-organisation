@@ -22,28 +22,43 @@ Parameters:
   ArtifactBucket:
     Type: String
     Description: Bucket name for artifact files
+    AllowedPattern: ^[0-9a-z]+([0-9a-z-.]*[0-9a-z])*$
+    MinLength: 3
+    MaxLength: 63
   WorkloadRegions:
     Type: String
-    Description: List of all regions which will have EC2 workloads, in the following format, eu-west-1,us-east-2,ap-north-1 
-  PatchingTemplateStackAccountId:  
+    Description: List of all regions which will have EC2 workloads, in the following format, eu-west-1,us-east-2,ap-north-1
+    AllowedPattern: ^[a-z][a-z]-[a-z]{4,9}-[0-9]
+  PatchingTemplateStackAccountId:
     Type : 'String'
-    Description: 'The account ID of the patching template.'    
+    Description: 'The account ID of the patching template.'
+    AllowedPattern: ^[0-9]*$
+    MinLength: 12
+    MaxLength: 12
   PatchingExecutionLogsBucketName:
     Type : 'String'
     Description: 'The name of the S3 bucket used to store execution logs centrally.'
+    AllowedPattern: ^[0-9a-z]+([0-9a-z-.]*[0-9a-z])*$
+    MinLength: 3
+    MaxLength: 63
   ManagedInstancesDataBucketName:
     Type : 'String'
     Description: 'The name of the S3 bucket used to store resource data sync details'
+    AllowedPattern: ^[0-9a-z]+([0-9a-z-.]*[0-9a-z])*$
+    MinLength: 3
+    MaxLength: 63
   PatchingTemplateStackRegion:
     Type : 'String'
     Description: 'The region of the patching template.'
+    AllowedPattern: ^[a-z][a-z]-[a-z]{4,9}-[0-9]$
   ManagedInstancesDataEncryptionKey:
     Type : 'String'
     Description: 'The ARN of the KMS key used to encrypt resource data sync logs'
+    AllowedPattern: ^arn:aws:kms
   BaselineOverrideBucket:
     Type : 'String'
     Description: The ARN of the S3 bucket used to store patch baseline override list.
-
+    AllowedPattern: "^arn:aws:s3:::"
 Conditions:
   CreateResources: !Equals [!Ref 'AWS::Region', !Ref PatchingTemplateStackRegion]
 
@@ -69,40 +84,40 @@ Resources:
       Name: AWS-GatherSoftwareInventory
       ScheduleExpression: "cron(0 6 * * ? *)"
       OutputLocation:
-        S3Location: 
+        S3Location:
           OutputS3BucketName: !Ref PatchingExecutionLogsBucketName
           OutputS3KeyPrefix: !Join [ '', ['inventory-execution-logs/', 'accountid=', !Ref 'AWS::AccountId', '/', 'region=', !Ref 'AWS::Region'] ]
       Targets:
       - Key: InstanceIds
         Values:
         - "*"
-      Parameters: 
-        applications: 
+      Parameters:
+        applications:
           - "Enabled"
-        awsComponents: 
+        awsComponents:
           - "Enabled"
         files:
           - ""
-        networkConfig: 
+        networkConfig:
           - "Enabled"
-        windowsUpdates: 
+        windowsUpdates:
           - "Enabled"
-        instanceDetailedInformation: 
+        instanceDetailedInformation:
           - "Enabled"
-        services: 
+        services:
           - "Enabled"
         windowsRegistry:
           - ""
-        windowsRoles: 
+        windowsRoles:
           - "Enabled"
         customInventory:
           - "Enabled"
-        billingInfo: 
+        billingInfo:
           - "Enabled"
-          
+
   ResourceDataSync:
     Type: AWS::SSM::ResourceDataSync
-    Properties: 
+    Properties:
       SyncName: 'InventoryData'
       S3Destination:
         BucketName: !Ref ManagedInstancesDataBucketName
@@ -134,9 +149,9 @@ Resources:
             - Effect: Allow
               Action:
               - lambda:InvokeFunction
-              Resource: 
-                - !GetAtt MaintenanceWindowTaskFunction.Arn 
-                - !GetAtt MaintenanceWindowASGTaskFunction.Arn 
+              Resource:
+                - !GetAtt MaintenanceWindowTaskFunction.Arn
+                - !GetAtt MaintenanceWindowASGTaskFunction.Arn
 
 # Maintenance window creation lambda
   MaintenanceWindowCreationLambdaRole:
@@ -153,8 +168,8 @@ Resources:
             - lambda.amazonaws.com
           Action: sts:AssumeRole
       Path: "/"
-      ManagedPolicyArns: 
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: AllowMW
           PolicyDocument:
@@ -172,6 +187,13 @@ Resources:
               Action:
               - iam:PassRole
               Resource: !GetAtt MaintenanceWindowRole.Arn
+
+  MaintenanceWindowCreationFunctionLogGroup:
+    Condition: CreateResources
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${MaintenanceWindowCreationFunction}
+      RetentionInDays: 7
 
   MaintenanceWindowCreationFunction:
   # Best practices for working with AWS Lambda Functions: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
@@ -191,7 +213,7 @@ Resources:
           SERVICE_ROLE_ARN: !GetAtt MaintenanceWindowRole.Arn
       Role: !GetAtt MaintenanceWindowCreationLambdaRole.Arn
       Layers:
-        - !Ref CrHelperLambdaLayer      
+        - !Ref CrHelperLambdaLayer
       Timeout: 60
       MemorySize: 128
       Runtime: python3.8
@@ -211,9 +233,9 @@ Resources:
             - lambda.amazonaws.com
           Action: sts:AssumeRole
       Path: "/"
-      ManagedPolicyArns: 
-        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonEC2ReadOnlyAccess
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: AllowTag
           PolicyDocument:
@@ -226,6 +248,13 @@ Resources:
               - autoscaling:CreateOrUpdateTags
               - autoscaling:DeleteTags
               Resource: '*'
+
+  MaintenanceWindowTaggingFunctionLogGroup:
+    Condition: CreateResources
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${MaintenanceWindowTaggingFunction}
+      RetentionInDays: 7
 
   MaintenanceWindowTaggingFunction:
   # Best practices for working with AWS Lambda Functions: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
@@ -241,9 +270,9 @@ Resources:
       Role: !GetAtt MaintenanceWindowTaggingLambdaRole.Arn
       Environment:
         Variables:
-          WORKLOAD_REGIONS: !Ref WorkloadRegions           
+          WORKLOAD_REGIONS: !Ref WorkloadRegions
       Layers:
-        - !Ref CrHelperLambdaLayer 
+        - !Ref CrHelperLambdaLayer
       Timeout: 360
       MemorySize: 128
       Runtime: python3.8
@@ -264,10 +293,10 @@ Resources:
             - lambda.amazonaws.com
           Action: sts:AssumeRole
       Path: "/"
-      ManagedPolicyArns: 
-        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
-        - arn:aws:iam::aws:policy/AutoScalingFullAccess
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonEC2ReadOnlyAccess
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AutoScalingFullAccess
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: SSMDocInvoke
           PolicyDocument:
@@ -277,10 +306,10 @@ Resources:
               Action:
               - ssm:StartAutomationExecution
               Resource:
-                - Fn::Sub: 
+                - Fn::Sub:
                   - arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:automation-definition/${StandaloneEC2PatchDocument}:$DEFAULT
                   - {StandaloneEC2PatchDocument: !Ref StandaloneEC2PatchDocument}
-                - Fn::Sub: 
+                - Fn::Sub:
                   - arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:automation-definition/${ASGEC2PatchDocument}:$DEFAULT
                   - {ASGEC2PatchDocument: !Ref ASGEC2PatchDocument}
         - PolicyName: PassSSMRole
@@ -309,11 +338,18 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-            - Action: 
+            - Action:
               - ec2:CreateSecurityGroup
               - ec2:AuthorizeSecurityGroupEgress
               Resource: '*'
-              Effect: Allow            
+              Effect: Allow
+
+  MaintenanceWindowTaskFunctionLogGroup:
+    Condition: CreateResources
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${MaintenanceWindowTaskFunction}
+      RetentionInDays: 7
 
 # Standalone EC2 task lambda
   MaintenanceWindowTaskFunction:
@@ -338,6 +374,13 @@ Resources:
       MemorySize: 128
       Runtime: python3.8
 
+  MaintenanceWindowASGTaskFunctionLogGroup:
+    Condition: CreateResources
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${MaintenanceWindowASGTaskFunction}
+      RetentionInDays: 7
+
 # ASG EC2 task lambda
   MaintenanceWindowASGTaskFunction:
   # Best practices for working with AWS Lambda Functions: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
@@ -352,15 +395,15 @@ Resources:
       Handler: maintenance_window_asg_task.lambda_handler
       Environment:
         Variables:
-          ASG_UPDATE_LAMBDA_NAME: !Ref UpdateASGFunction 
+          ASG_UPDATE_LAMBDA_NAME: !Ref UpdateASGFunction
           ASG_EXECUTION_ROLE_NAME: !Ref AutomationAdministrationServiceRole
           ASG_DOCUMENT_NAME: !Ref ASGEC2PatchDocument
           PROFILE_ROLE_NAME: !Ref InstanceProfileforPatching
           ADMINISTRATION_ROLE_NAME: !Ref AutomationAdministrationServiceRole
           EXECUTION_ROLE_NAME: !Ref AutomationExecutionServiceRole
           DOCUMENT_NAME: !Ref StandaloneEC2PatchDocument
-          PATCHING_TEMPLATE_REGION: !Ref PatchingTemplateStackRegion          
-          WORKLOAD_REGIONS: !Ref WorkloadRegions          
+          PATCHING_TEMPLATE_REGION: !Ref PatchingTemplateStackRegion
+          WORKLOAD_REGIONS: !Ref WorkloadRegions
       Role: !GetAtt TaskLambdasRole.Arn
       Timeout: 900
       MemorySize: 128
@@ -377,8 +420,8 @@ Resources:
         Statement:
         - Effect: Allow
           Principal:
-            AWS: 
-            - !Join [ '', ['arn:aws:iam::', !Ref PatchingTemplateStackAccountId, ':root'] ]            
+            AWS:
+            - !Sub arn:${AWS::Partition}:iam::${PatchingTemplateStackAccountId}:root
           Action: sts:AssumeRole
       Path: "/"
       Policies:
@@ -389,9 +432,9 @@ Resources:
             - Effect: Allow
               Action:
               - lambda:InvokeFunction
-              Resource: 
-                - !GetAtt MaintenanceWindowTaskFunction.Arn 
-                - !GetAtt MaintenanceWindowASGTaskFunction.Arn 
+              Resource:
+                - !GetAtt MaintenanceWindowTaskFunction.Arn
+                - !GetAtt MaintenanceWindowASGTaskFunction.Arn
 
 ## SSM documents resources
 # SSM execution roles
@@ -407,12 +450,12 @@ Resources:
             Service:
             - ssm.amazonaws.com
             - ec2.amazonaws.com
-            AWS: 
-            - !Join [ '', ['arn:aws:iam::', !Ref PatchingTemplateStackAccountId, ':root'] ]
-            - !Sub arn:aws:iam::${AWS::AccountId}:root
+            AWS:
+            - !Sub arn:${AWS::Partition}:iam::${PatchingTemplateStackAccountId}
+            - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
           Action: sts:AssumeRole
       ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/service-role/AmazonSSMAutomationRole
+      - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AmazonSSMAutomationRole
       Path: "/"
       RoleName: AutomationExecutionRole
       Policies:
@@ -423,10 +466,10 @@ Resources:
             - Effect: Allow
               Action:
               - iam:PassRole
-              Resource: 
-              - !Join [ '', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':role/SystemsManager-AutomationExecutionRole'] ]
-              - !Join [ '', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':role/AutomationExecutionRole'] ]
-              - !Join [ '', ['arn:aws:iam::', !Ref 'AWS::AccountId', ':role/', !Ref 'PatchingInstanceRole'] ]
+              Resource:
+              - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SystemsManager-AutomationExecutionRole
+              - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/AutomationExecutionRole
+              - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${PatchingInstanceRole}
         - PolicyName: getTagPermissions
           PolicyDocument:
             Version: '2012-10-17'
@@ -450,8 +493,8 @@ Resources:
             - Effect: Allow
               Action:
               - lambda:InvokeFunction
-              Resource: 
-                - !Join [ '', ['arn:aws:lambda:*:', !Ref 'AWS::AccountId', ':function:UpdateASGFunction'] ]
+              Resource:
+                - !Sub arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:UpdateASGFunction
         - PolicyName: describeInstanceRefresh
           PolicyDocument:
             Version: '2012-10-17'
@@ -469,7 +512,7 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource: !Sub ${BaselineOverrideBucket}/*
-                                
+
   AutomationAdministrationServiceRole:
     Condition: CreateResources
     Type: AWS::IAM::Role
@@ -519,7 +562,7 @@ Resources:
             - ec2.amazonaws.com
           Action: sts:AssumeRole
       ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore
       Path: "/"
       Policies:
       - PolicyName: CentralAccountS3Permissions
@@ -531,9 +574,9 @@ Resources:
             - s3:GetObject
             - s3:PutObject
             - s3:PutObjectAcl
-            Resource: 
-              - !Join [ '', ['arn:aws:s3:::', !Ref 'PatchingExecutionLogsBucketName'] ]
-              - !Join [ '', ['arn:aws:s3:::', !Ref 'PatchingExecutionLogsBucketName', '/*'] ]
+            Resource:
+              - !Sub arn:${AWS::Partition}:s3:::${PatchingExecutionLogsBucketName}
+              - !Sub arn:${AWS::Partition}:s3:::${PatchingExecutionLogsBucketName}/*
       - PolicyName: InstallOverrideBucketPermission
         PolicyDocument:
           Version: '2012-10-17'
@@ -541,8 +584,8 @@ Resources:
           - Effect: Allow
             Action:
             - s3:GetObject
-            Resource: 
-              - !Join [ '', ['arn:aws:s3:::', !Ref 'BaselineOverrideBucket', '/*'] ]
+            Resource:
+              - !Sub ${BaselineOverrideBucket}/*
 
   InstanceProfileforPatching:
     Condition: CreateResources
@@ -551,23 +594,23 @@ Resources:
       Path: "/"
       Roles:
       - !Ref PatchingInstanceRole
-      InstanceProfileName: InstanceProfileforPatching 
+      InstanceProfileName: InstanceProfileforPatching
 
 # Standalone EC2 SSM patching document
   StandaloneEC2PatchDocument:
     Condition: CreateResources
     Type: AWS::SSM::Document
-    Properties: 
+    Properties:
       DocumentType: Automation
       Content:
         description: >-
           **Description**
-          
+
           This document runs the Command document ```AWS-RunPatchBaseline``` on the specified instances.
         schemaVersion: '0.3'
         assumeRole: '{{ AutomationAssumeRole }}'
         parameters:
-          AutomationAssumeRole: 
+          AutomationAssumeRole:
             type: String
             description: The ARN of the Automation service role to assume.
           Operation:
@@ -583,7 +626,7 @@ Resources:
             default: RebootIfNeeded
             description: >-
               (Optional) Reboot behavior after a patch Install operation. If you choose
-              NoReboot and patches are installed, the instance is marked as non-compliant 
+              NoReboot and patches are installed, the instance is marked as non-compliant
               until a subsequent reboot and scan.
           InstallOverrideList:
             type: String
@@ -599,7 +642,7 @@ Resources:
             type: String
             default: 10%
             description: >-
-              (Optional) Specify the number or percentage of targets on which to execute the task at the same time. You can specify a number, such as 10, or a percentage, such as 10%. The default value is 10%.    
+              (Optional) Specify the number or percentage of targets on which to execute the task at the same time. You can specify a number, such as 10, or a percentage, such as 10%. The default value is 10%.
           MaximumErrors:
             type: String
             default: 10%
@@ -641,9 +684,9 @@ Resources:
 
 # ASG EC2 SSM patching document
   ASGEC2PatchDocument:
-    Condition: CreateResources 
+    Condition: CreateResources
     Type: AWS::SSM::Document
-    Properties: 
+    Properties:
       DocumentType: Automation
       Content:
         description: Systems Manager Automation Demo - Patch AMI and Update ASG
@@ -806,10 +849,16 @@ Resources:
             - lambda.amazonaws.com
           Action: sts:AssumeRole
       Path: "/"
-      ManagedPolicyArns: 
-        - arn:aws:iam::aws:policy/AutoScalingFullAccess
-        - arn:aws:iam::aws:policy/AWSLambdaExecute
-        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AutoScalingFullAccess
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AWSLambdaExecute
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonEC2ReadOnlyAccess
+
+  UpdateASGFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${UpdateASGFunction}
+      RetentionInDays: 7
 
   UpdateASGFunction:
   # Best practices for working with AWS Lambda Functions: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
@@ -821,7 +870,7 @@ Resources:
       Role: !GetAtt ASGUpdateLambdaRole.Arn
       Timeout: 300
       MemorySize: 128
-      Runtime: python3.8    
+      Runtime: python3.8
       Code:
         ZipFile: |
           import json
@@ -862,7 +911,7 @@ Resources:
 
               # update ASG to use new LC
               response = client.update_auto_scaling_group(AutoScalingGroupName = target_asg,LaunchConfigurationName = newLaunchConfigName)
-              
+
               if refresh_asg_instances == 'Yes':
                   response = client.start_instance_refresh(
                       AutoScalingGroupName=target_asg,
@@ -871,11 +920,11 @@ Resources:
                           'MinHealthyPercentage': int(retain_healthy_percentage),
                           'InstanceWarmup': 120
                       })
-              
+
               return 'Updated ASG `%s` with new launch configuration `%s` which includes AMI `%s`.' % (event['targetASG'], newLaunchConfigName, new_ami_id)
 
 ## Config rule resources
-# Patch tag monitoring config rule 
+# Patch tag monitoring config rule
   PatchTagMonitoringConfigRule:
     Type: 'AWS::Config::ConfigRule'
     Properties:
@@ -894,11 +943,11 @@ Resources:
       Source:
         Owner: AWS
         SourceIdentifier: REQUIRED_TAGS
-    
+
 # Event bridge rule for invoking Lambda
   EC2TagMonitoringEventRule:
     Type: AWS::Events::Rule
-    Properties: 
+    Properties:
       Description: "If tag is not attached to perticular Ec2 Instnace or ASG then EventRule will invoke lambda to attached specific tags"
       EventPattern:
           {
@@ -910,8 +959,8 @@ Resources:
                 }
               }
       State: "ENABLED"
-      Targets: 
-        - Arn:  
+      Targets:
+        - Arn:
               Fn::GetAtt:
                 - "PatchTagMonitoringFunction"
                 - "Arn"
@@ -919,15 +968,15 @@ Resources:
 
   PermissionForEventsToInvokeLambda:
     Type: AWS::Lambda::Permission
-    Properties: 
-      FunctionName: !Ref PatchTagMonitoringFunction  
+    Properties:
+      FunctionName: !Ref PatchTagMonitoringFunction
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
-      SourceArn: 
-        Fn::GetAtt: 
+      SourceArn:
+        Fn::GetAtt:
           - "EC2TagMonitoringEventRule"
           - "Arn"
-      
+
 # Tag monitoring function
   PatchTagMonitoringFunctionRole:
     Type: AWS::IAM::Role
@@ -943,9 +992,9 @@ Resources:
             - ssm.amazonaws.com
           Action: sts:AssumeRole
       Path: "/"
-      ManagedPolicyArns: 
-        - arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/AmazonEC2ReadOnlyAccess
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: AllowTag
           PolicyDocument:
@@ -965,7 +1014,13 @@ Resources:
             - Effect: Allow
               Action:
               - ssm:*MaintenanceWindow*
-              Resource: '*'              
+              Resource: '*'
+
+  PatchTagMonitoringFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${PatchTagMonitoringFunction}
+      RetentionInDays: 7
 
   PatchTagMonitoringFunction:
   # Best practices for working with AWS Lambda Functions: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
@@ -1011,16 +1066,16 @@ Resources:
                   patching_template_region = os.environ["PATCHING_TEMPLATE_REGION"]
                   self.ssm_client = boto3.client('ssm', region_name=patching_template_region)
                   try:
-                      self.supported_env_list = ['Default','Dev','Test','Prod'] 
+                      self.supported_env_list = ['Default','Dev','Test','Prod']
                       self.supported_asg_list = ['null']
-                      self.supported_patch_list = ['null']            
-                      self.supported_eks_list = ['null']            
+                      self.supported_patch_list = ['null']
+                      self.supported_eks_list = ['null']
                   except Exception as exception:
                       self.reason_data = "Missing required property %s" % exception
                       LOGGER.error(self.reason_data)
                       print("Failed in except block of __init__")
 
-              def get_instance_list(self,instance_id):      
+              def get_instance_list(self,instance_id):
                   try:
                       response = self.ec2_client.describe_instances(InstanceIds=[instance_id])
                       try:
@@ -1033,7 +1088,7 @@ Resources:
                       print(message)
                       return message
 
-              def build_instance_list(self, instance_tags): 
+              def build_instance_list(self, instance_tags):
                   instance_tag_env = []
                   instance_tag_asg = []
                   instance_tag_patch = []
@@ -1079,7 +1134,7 @@ Resources:
                   except Exception as exception:
                       message = 'no instances to tag' +str(exception)
                       print(message)
-                      return message  
+                      return message
 
               def check_mw(self,env):
                   response = self.ssm_client.describe_maintenance_windows(
@@ -1121,14 +1176,14 @@ Resources:
                               exempt = True
                       if exempt==False:
                           self.env = 'null'
-                          for tags in response['AutoScalingGroups'][0]['Tags']:                       
+                          for tags in response['AutoScalingGroups'][0]['Tags']:
                               if tags['Key'] == 'environment' and tags['Value'] in self.supported_env_list:
                                   self.env = tags['Value']
-                              
+
                       return exempt
 
 
-                  except Exception as exp:  
+                  except Exception as exp:
                       print('No such ASG '+str(exp))
 
               def tag_asg_main(self,asg_name):
@@ -1144,7 +1199,7 @@ Resources:
                                           'Key': 'Patch Group',
                                           'Value': self.env,
                                           'PropagateAtLaunch': False
-                                      },       
+                                      },
                                       {
                                           'ResourceId': asg_name,
                                           'ResourceType': 'auto-scaling-group',
@@ -1163,7 +1218,7 @@ Resources:
                                           'Key': 'Patch Group',
                                           'Value': 'Default',
                                           'PropagateAtLaunch': False
-                                      },       
+                                      },
                                       {
                                           'ResourceId': asg_name,
                                           'ResourceType': 'auto-scaling-group',
@@ -1182,14 +1237,14 @@ Resources:
                                           'Key': 'environment',
                                           'Value': 'Default',
                                           'PropagateAtLaunch': False
-                                      },                           
+                                      },
                                       {
                                           'ResourceId': asg_name,
                                           'ResourceType': 'auto-scaling-group',
                                           'Key': 'Patch Group',
                                           'Value': 'Default',
                                           'PropagateAtLaunch': False
-                                      },       
+                                      },
                                       {
                                           'ResourceId': asg_name,
                                           'ResourceType': 'auto-scaling-group',
@@ -1200,7 +1255,7 @@ Resources:
                                   ]
                               )
                   except Exception as exp:
-                      print(str(exp))            
+                      print(str(exp))
 
           def lambda_handler(event, context):
               tag_instances = TagInstances(event,context)
@@ -1218,9 +1273,9 @@ Resources:
 ## Default maintenance window resources
 # Default maintenance window
   DefaultMaintenanceWindow:
-    Condition: CreateResources    
+    Condition: CreateResources
     Type: AWS::SSM::MaintenanceWindow
-    Properties: 
+    Properties:
       AllowUnassociatedTargets: true
       Cutoff: 1
       Description: 'Default Maintenance Window'
@@ -1229,35 +1284,35 @@ Resources:
       Schedule: "cron(0 0 5 ? * FRI *)"
 
 # Default maintenance window standalone EC2 task
-  DefaultMaintenanceWindowTask:        
+  DefaultMaintenanceWindowTask:
     Condition: CreateResources
     Type: AWS::SSM::MaintenanceWindowTask
-    Properties: 
+    Properties:
       Priority: 1
       ServiceRoleArn: !GetAtt MaintenanceWindowRole.Arn
       TaskArn: !GetAtt MaintenanceWindowTaskFunction.Arn
-      TaskInvocationParameters: 
+      TaskInvocationParameters:
         MaintenanceWindowLambdaParameters:
-          Payload: 
+          Payload:
             Fn::Base64: |
               {
                 "env": "Default",
                 "patching_operation": "Install",
                 "operation_post_patching": "RebootIfNeeded",
-                "run_patch_baseline_install_override_list": ""                            
+                "run_patch_baseline_install_override_list": ""
               }
       TaskType: LAMBDA
       WindowId: !Ref DefaultMaintenanceWindow
 
 # Default maintenance window ASG EC2 task
-  DefaultMaintenanceWindowASGTask:     
+  DefaultMaintenanceWindowASGTask:
     Condition: CreateResources
     Type: AWS::SSM::MaintenanceWindowTask
-    Properties: 
+    Properties:
       Priority: 1
       ServiceRoleArn: !GetAtt MaintenanceWindowRole.Arn
       TaskArn: !GetAtt MaintenanceWindowASGTaskFunction.Arn
-      TaskInvocationParameters: 
+      TaskInvocationParameters:
         MaintenanceWindowLambdaParameters:
           Payload:
             Fn::Base64: |
@@ -1266,7 +1321,7 @@ Resources:
                 "retain_healthy_percentage": "90",
                 "refresh_asg_instances": "Yes",
                 "patching_operation": "Install",
-                "run_patch_baseline_install_override_list": ""                            
+                "run_patch_baseline_install_override_list": ""
               }
       TaskType: LAMBDA
       WindowId: !Ref DefaultMaintenanceWindow

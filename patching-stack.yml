@@ -22,15 +22,19 @@ Parameters:
   ArtifactBucket:
     Type: String
     Description: Bucket name for artifact zip files
+    AllowedPattern: ^[0-9a-z]+([0-9a-z-.]*[0-9a-z])*$
+    MinLength: 3
+    MaxLength: 63
   OrgID:
     Description: Organization ID used for S3 bucket sharing
     Type: String
+    AllowedPattern: ^o-[a-z0-9]{10,32}
 
 Resources:
 # Managed inventory resources
-# Best practices document for KMS : https://docs.aws.amazon.com/whitepapers/latest/kms-best-practices/key-policies.html 
-                                    # https://docs.aws.amazon.com/whitepapers/latest/kms-best-practices/least-privilege-separation-of-duties.html 
-                                    # https://docs.aws.amazon.com/kms/latest/developerguide/monitoring-overview.html 
+# Best practices document for KMS : https://docs.aws.amazon.com/whitepapers/latest/kms-best-practices/key-policies.html
+                                    # https://docs.aws.amazon.com/whitepapers/latest/kms-best-practices/least-privilege-separation-of-duties.html
+                                    # https://docs.aws.amazon.com/kms/latest/developerguide/monitoring-overview.html
   ManagedInstancesDataEncryptionKey:
     Type: AWS::KMS::Key
     Properties:
@@ -44,7 +48,7 @@ Resources:
         - Sid: Enable IAM User Permissions
           Effect: Allow
           Principal:
-            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
           Action: kms:*
           Resource: '*'
         - Sid: Allow use of the key by Systems Manager
@@ -64,11 +68,11 @@ Resources:
           Principal: "*"
           Action:
             - kms:Encrypt
-            - kms:GenerateDataKey  
+            - kms:GenerateDataKey
           Resource: '*'
           Condition:
             StringEquals:
-              aws:PrincipalOrgID: !Ref OrgID          
+              aws:PrincipalOrgID: !Ref OrgID
 
   ManagedInstancesDataEncryptionKeyAlias:
     Type: AWS::KMS::Alias
@@ -88,7 +92,7 @@ Resources:
           - ServerSideEncryptionByDefault:
               KMSMasterKeyID: !Ref ManagedInstancesDataEncryptionKey
               SSEAlgorithm: aws:kms
-      LifecycleConfiguration: 
+      LifecycleConfiguration:
         Rules:
           - Id: ResourceSyncGlacierRule
             Prefix: glacier
@@ -96,7 +100,7 @@ Resources:
             Transitions:
               - TransitionInDays: 90
                 StorageClass: GLACIER
-            ExpirationInDays: 365              
+            ExpirationInDays: 365
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -120,7 +124,7 @@ Resources:
           Principal:
             Service: ssm.amazonaws.com
           Action: s3:PutObject
-          Resource: !Sub arn:aws:s3:::${ManagedInstancesDataBucket}/*
+          Resource: !Sub arn:${AWS::Partition}:s3:::${ManagedInstancesDataBucket}/*
           Condition:
             StringEquals:
               s3:x-amz-server-side-encryption: aws:kms
@@ -130,20 +134,20 @@ Resources:
           Principal:
             Service: ssm.amazonaws.com
           Action: s3:PutObjectTagging
-          Resource: !Sub arn:aws:s3:::${ManagedInstancesDataBucket}/*/accountid=*/*
+          Resource: !Sub arn:${AWS::Partition}:s3:::${ManagedInstancesDataBucket}/*/accountid=*/*
         - Sid: SSMWrite
           Effect: Allow
           Principal: "*"
           Action: s3:PutObject
-          Resource: !Sub arn:aws:s3:::${ManagedInstancesDataBucket}/*
+          Resource: !Sub arn:${AWS::Partition}:s3:::${ManagedInstancesDataBucket}/*
           Condition:
             StringEquals:
-              aws:PrincipalOrgID: !Ref OrgID          
+              aws:PrincipalOrgID: !Ref OrgID
 
 # Patching resources
   PatchingExecutionLogsBucket:
   # please make sure to follow best practices reccommended by AWS for creating S3 buckets
-  # https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html  
+  # https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'patching-execution-logs-${AWS::Region}-${AWS::AccountId}'
@@ -154,7 +158,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      LifecycleConfiguration: 
+      LifecycleConfiguration:
         Rules:
           - Id: ExecutionGlacierRule
             Prefix: glacier
@@ -162,13 +166,13 @@ Resources:
             Transitions:
               - TransitionInDays: 30
                 StorageClass: GLACIER
-            ExpirationInDays: 365              
+            ExpirationInDays: 365
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-          
+
   PatchingExecutionLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -178,10 +182,10 @@ Resources:
         - Sid: SSMWrite
           Effect: Allow
           Principal: "*"
-          Action: 
+          Action:
             - s3:PutObject
             - s3:PutObjectAcl
-          Resource: 
+          Resource:
             - !Join [ '', [!GetAtt PatchingExecutionLogsBucket.Arn, '/*'] ]
           Condition:
             StringEquals:
@@ -225,8 +229,8 @@ Resources:
             - lambda.amazonaws.com
           Action: sts:AssumeRole
       Path: "/"
-      ManagedPolicyArns: 
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      ManagedPolicyArns:
+        - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: OrgActions
           PolicyDocument:
@@ -244,7 +248,13 @@ Resources:
               - Effect: Allow
                 Action:
                   - sts:AssumeRole
-                Resource: arn:aws:iam::*:role/EmergencyPatchingRole
+                Resource: !Sub arn:${AWS::Partition}:iam::*:role/EmergencyPatchingRole
+
+  EmergencyPatchingFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${EmergencyPatchingFunction}
+      RetentionInDays: 7
 
   EmergencyPatchingFunction:
   # Best practices for working with AWS Lambda Functions: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
@@ -290,8 +300,8 @@ Resources:
             - Effect: Allow
               Action:
               - lambda:InvokeFunction
-              Resource: 
-                - !GetAtt EmergencyPatchingFunction.Arn 
+              Resource:
+                - !GetAtt EmergencyPatchingFunction.Arn
         - PolicyName: CloudWatchLogs
           PolicyDocument:
             Version: '2012-10-17'
@@ -301,13 +311,13 @@ Resources:
               - logs:CreateLogGroup
               - logs:CreateLogStream
               - logs:PutLogEvents
-              Resource: "*"                
+              Resource: "*"
 
   EmergencyPatchingStateMachine:
     Type: AWS::StepFunctions::StateMachine
     Properties:
       StateMachineName: EmergencyPatchingStateMachine
-      DefinitionString: 
+      DefinitionString:
         !Sub
           - |-
             {
@@ -325,7 +335,7 @@ Resources:
 
   PatchBaselineOverrideBucket:
   # please make sure to follow best practices reccommended by AWS for creating S3 buckets
-  # https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html 
+  # https://docs.aws.amazon.com/AmazonS3/latest/userguide/security-best-practices.html
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub 'patch-baseline-override-${AWS::Region}-${AWS::AccountId}'
@@ -336,7 +346,7 @@ Resources:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: AES256
-      LifecycleConfiguration: 
+      LifecycleConfiguration:
         Rules:
           - Id: InventoryGlacierRule
             Prefix: glacier
@@ -344,7 +354,7 @@ Resources:
             Transitions:
               - TransitionInDays: 30
                 StorageClass: GLACIER
-            ExpirationInDays: 365              
+            ExpirationInDays: 365
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -361,10 +371,10 @@ Resources:
           Effect: Allow
           Principal: "*"
           Action: s3:GetObject
-          Resource: !Sub arn:aws:s3:::${PatchBaselineOverrideBucket}/*
+          Resource: !Sub arn:${AWS::Partition}:s3:::${PatchBaselineOverrideBucket}/*
           Condition:
             StringEquals:
-              aws:PrincipalOrgID: !Ref OrgID      
+              aws:PrincipalOrgID: !Ref OrgID
 
 # Reporting resources
   GlueDatabase:
@@ -374,7 +384,7 @@ Resources:
       DatabaseInput:
         Name: managed_instances_database
         Description: Database used for patch reporting
-  
+
   GlueCrawler:
     Type: AWS::Glue::Crawler
     Properties:
@@ -382,14 +392,14 @@ Resources:
       Description: Crawler for managed instances data
       Name: Managed-Instances-GlueCrawler
       Role: !GetAtt GlueCrawlerRole.Arn
-      Schedule: 
+      Schedule:
         ScheduleExpression: 'cron(0 8 * * ? *)'
-      Targets: 
-        S3Targets: 
+      Targets:
+        S3Targets:
           - Path: !Ref ManagedInstancesDataBucket
             Exclusions:
               - AWS:InstanceInformation/accountid=*/test.json
-  
+
   GlueCrawlerRole:
     Type: AWS::IAM::Role
     Properties:
@@ -404,7 +414,7 @@ Resources:
           Action:
           - sts:AssumeRole
       ManagedPolicyArns:
-      - arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole
+      - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSGlueServiceRole
       Path: "/service-role/"
       Description: Role created for Glue to access managed instances data S3 bucket
       Policies:
@@ -435,7 +445,7 @@ Resources:
               Action:
                 - sts:AssumeRole
         ManagedPolicyArns:
-          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+          - !Sub arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         Policies:
           - PolicyName: GlueActions
             PolicyDocument:
@@ -446,9 +456,15 @@ Resources:
                     - glue:GetTable
                     - glue:UpdateTable
                   Resource:
-                    - !Sub arn:aws:glue:${AWS::Region}:${AWS::AccountId}:catalog
-                    - !Sub arn:aws:glue:${AWS::Region}:${AWS::AccountId}:database/${GlueDatabase}
-                    - !Sub arn:aws:glue:${AWS::Region}:${AWS::AccountId}:table/${GlueDatabase}/aws_instanceinformation
+                    - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:catalog
+                    - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:database/${GlueDatabase}
+                    - !Sub arn:${AWS::Partition}:glue:${AWS::Region}:${AWS::AccountId}:table/${GlueDatabase}/aws_instanceinformation
+
+  DeleteGlueColumnFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${DeleteGlueColumnFunction}
+      RetentionInDays: 7
 
   DeleteGlueColumnFunction:
   # Best practices for working with AWS Lambda Functions: https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html
@@ -537,7 +553,7 @@ Resources:
           - ServerSideEncryptionByDefault:
               KMSMasterKeyID: !Ref ManagedInstancesDataEncryptionKey
               SSEAlgorithm: aws:kms
-      LifecycleConfiguration: 
+      LifecycleConfiguration:
         Rules:
           - Id: AthenaGlacierRule
             Prefix: glacier
@@ -545,7 +561,7 @@ Resources:
             Transitions:
               - TransitionInDays: 30
                 StorageClass: GLACIER
-            ExpirationInDays: 365              
+            ExpirationInDays: 365
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -562,38 +578,38 @@ Resources:
           Effect: Allow
           Principal:
             Service: athena.amazonaws.com
-          Action: 
+          Action:
           - s3:GetObject
           - s3:PutObject
-          Resource: !Sub arn:aws:s3:::${AthenaQueryResultsBucket}/*
+          Resource: !Sub arn:${AWS::Partition}:s3:::${AthenaQueryResultsBucket}/*
 
   AthenaQueryNonCompliantPatch:
     Type: AWS::Athena::NamedQuery
-    Properties: 
+    Properties:
       Database: !Join [ '-', [!Ref ManagedInstancesDataBucket, 'database'] ]
       Description: Example query to list managed instances that are non-compliant for patching.
       Name: QueryNonCompliantPatch
       QueryString: |
-        SELECT 
-          * 
-        FROM 
-          aws_complianceitem 
-        WHERE 
-          status='NON_COMPLIANT' AND compliancetype='Patch' 
+        SELECT
+          *
+        FROM
+          aws_complianceitem
+        WHERE
+          status='NON_COMPLIANT' AND compliancetype='Patch'
         LIMIT 20
 
   AthenaQueryInstanceList:
     Type: AWS::Athena::NamedQuery
-    Properties: 
+    Properties:
       Database: !Join [ '-', [!Ref ManagedInstancesDataBucket, 'database'] ]
       Description: Example query to return a list of non-terminated instances.
       Name: QueryInstanceList
       QueryString: |
-        SELECT 
-          * 
-        FROM 
-          aws_instanceinformation 
-        WHERE 
+        SELECT
+          *
+        FROM
+          aws_instanceinformation
+        WHERE
           instancestatus IS NULL;
   AthenaQueryManagedInstanceInventory:
     Type: AWS::Athena::NamedQuery
@@ -603,13 +619,13 @@ Resources:
       Name: PatchComplianceReport
       QueryString: |
         SELECT
-          aws_complianceitem.resourceid, aws_complianceitem.status, aws_complianceitem.compliancetype, aws_complianceitem.classification, aws_complianceitem.id, aws_complianceitem.patchstate, aws_complianceitem.accountid, aws_complianceitem.region, aws_complianceitem.installedtime, aws_complianceitem.capturetime, 
+          aws_complianceitem.resourceid, aws_complianceitem.status, aws_complianceitem.compliancetype, aws_complianceitem.classification, aws_complianceitem.id, aws_complianceitem.patchstate, aws_complianceitem.accountid, aws_complianceitem.region, aws_complianceitem.installedtime, aws_complianceitem.capturetime,
           aws_instanceinformation.platformname, aws_instanceinformation.ipaddress, aws_instanceinformation.platformtype, aws_instanceinformation.instancestatus
         FROM
           aws_complianceitem
         INNER JOIN aws_instanceinformation ON aws_instanceinformation.resourceid = aws_complianceitem.resourceid
         WHERE compliancetype='Patch'
- 
+
   AthenaQueryQuickSightInventoryCompliance:
     Type: AWS::Athena::NamedQuery
     Properties:
@@ -626,7 +642,7 @@ Resources:
         WHERE compliancetype='Patch'
 Outputs:
   PatchingTemplateStackAccountId:
-    Description: 'The account ID of the patching template.'    
+    Description: 'The account ID of the patching template.'
     Value: !Ref "AWS::AccountId"
   PatchingExecutionLogsBucketName:
     Description: The name of the S3 bucket used to store execution logs centrally.
