@@ -28,7 +28,7 @@ Parameters:
   WorkloadRegions:
     Type: String
     Description: List of all regions which will have EC2 workloads, in the following format, eu-west-1,us-east-2,ap-north-1
-    AllowedPattern: ^[a-z][a-z]-[a-z]{4,9}-[0-9]
+    AllowedPattern: ^[a-z][a-z]-[a-z]{4,9}-[0-9]+(,[a-z][a-z]-[a-z]{4,9}-[0-9]+)*$
   PatchingTemplateStackAccountId:
     Type : 'String'
     Description: 'The account ID of the patching template.'
@@ -54,11 +54,11 @@ Parameters:
   ManagedInstancesDataEncryptionKey:
     Type : 'String'
     Description: 'The ARN of the KMS key used to encrypt resource data sync logs'
-    AllowedPattern: ^arn:aws:kms
+    AllowedPattern: ^arn:aws:kms.*
   BaselineOverrideBucket:
     Type : 'String'
     Description: The ARN of the S3 bucket used to store patch baseline override list.
-    AllowedPattern: "^arn:aws:s3:::"
+    AllowedPattern: ^arn:aws:s3.*
 Conditions:
   CreateResources: !Equals [!Ref 'AWS::Region', !Ref PatchingTemplateStackRegion]
 
@@ -451,7 +451,7 @@ Resources:
             - ssm.amazonaws.com
             - ec2.amazonaws.com
             AWS:
-            - !Sub arn:${AWS::Partition}:iam::${PatchingTemplateStackAccountId}
+            - !Sub arn:${AWS::Partition}:iam::${PatchingTemplateStackAccountId}:root
             - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
           Action: sts:AssumeRole
       ManagedPolicyArns:
