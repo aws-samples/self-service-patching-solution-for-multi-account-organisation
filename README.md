@@ -161,7 +161,7 @@ Sample payload:
 {
   "env": "Default",
   "include_asg": "Yes",
-  "retain_healthy_percentage": 90,
+  "retain_healthy_percentage": "90",
   "refresh_asg_instances": "Yes",
   "patching_operation": "Install",
   "operation_post_patching": "RebootIfNeeded",
