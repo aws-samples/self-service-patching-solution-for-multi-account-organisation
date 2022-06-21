@@ -42,23 +42,25 @@
 ## Prerequisites
 1.	AWS Organization setup
 2.	AWS Config enabled in the child accounts
-3.  Delegated Administrator account for CloudFormation (if you are using any other account than organization payer)
+3.  Delegated Administrator account for AWS CloudFormation (If you are deploying this solution in any other account than Management account).
 
 ## Deployment Steps
 1.	Clone the repository.
-2.	Upload the zip versions of the .py files and patching_window.template file to a S3 bucket.
-3.	Upload the patching-stack.yml file and deploy the CloudFormation template in master account
+2.	Upload the zip versions of the .py files from the Lambdas folder in the repository, patching_window.yml and crhelper.zip file to an existing or a new Amazon Simple Storage Service (Amazon S3) bucket. Make sure that you update the bucket policy as per the policy json provided in the code repository.
+3.	Follow these instructions and deploy the CloudFormation template in the central account that you have designated for patching solution. This can be a delegated administrator for CloudFormation
     1. Navigate to CloudFormation in the AWS Console.
     2. Click on Create stack and click “with new resources(standard)”
     3. Under the Specify template section, click on Upload a template file
     4. Click on Choose file and select patching-stack.yml
 	5. Provide a stack name(example: “self-service-patching-stack”)
-    6.	Specify the bucket, where you have uploaded the code. it can be a new bucket or existing bucket, make sure to update the bucket policy as per the policy provided in bucket-policy.json file in the repository.
-    7.	Specify the Organization id.
+    6. Specify the bucket, where you have uploaded the code as per Deployment Steps.2
+    7. Specify the Organization id. Navigate to the organization from your AWS Console, and you’ll see the Organization Id at the organization dashboard.
         ![](images/Deploy-Stack-1.png)
-    8.	Click on Next
-    9.	Hit Next and check “I acknowledge that AWS CloudFormation might create IAM resources with custom names”
-    10.	Click on “Create Stack”.
+    8. Select Next.
+    9. Select Next and check “I acknowledge that AWS CloudFormation might create IAM resources with custom names”.
+    10. Select “Create Stack”.
+    11. Once the stack is in CREATE_COMPLETE state, select the stack and open the Outputs tab. Note all of the Keys and Values, as you will need it while deploying the StackSets
+
 4.  Deploy patching-stackset.yml in child accounts as stackset
     1. Navigate to CloudFormation in the AWS console and click on StackSets
     2. Click on Create StackSet and click on “Service-managed permissions”
@@ -66,15 +68,15 @@
     4. Click on Choose file and select patching-stackset.yml
     5. Enter a name for the StackSet (example: self-service-patching-stackset)
         ![](images/Deploy_stackset_Step4-a.png)
-    6.	Navigate to the Outputs section of the stack launched in step-3 and fetch the below information.
+    6. Provide the requested information.Look for the values that you noted in the Deployment Steps.3.k.For the Artifact bucket: mention the name of the bucket that you have uploaded zip files in Deployment Steps.2.
         ![](images/Deploy_stackset_Step4-b.png)
-    7.  Specify the regions separated by comma, in which you have EC2 workload
-    8.	Click Next
-    9.	Click Next
+    7. In WorkloadRegions: Specify the regions separated by comma, in which you have the EC2 workload.
+    8. Click Next
+    9. Click Next
     10.	Select Deployment target as “Deploy to organization”
         ![](images/Deploy_stackset_Step4-c.png)
     
-    11.	Select all the regions you want to cover.
+    11. Select all the regions you want to cover (please make sure to include the region in which the CloudFormation stack is deployed in Deployment Step.3)
     12.	Click on Next.
     13.	Scroll down and select the check box “I acknowledge that AWS CloudFormation might create IAM resources with custom names”.
     14.	Click on Submit and navigate to the Stack instances tab in the StackSet
