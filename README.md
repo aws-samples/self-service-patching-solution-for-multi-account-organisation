@@ -8,7 +8,7 @@
     - [Deployment Steps](#Deployment-Steps)
 - [Resources](#Resources)
 - [Usage](#Usage)
-    - [Prerequisites](#Prerequisites)
+    - [Prerequisites](#Usage)
     - [Steps](#Steps)
 - [Patching Process](#Patching-Process)
     - [Normal Patching Process](#Normal-Patching-Process)
