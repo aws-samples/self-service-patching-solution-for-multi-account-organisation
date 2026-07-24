@@ -143,6 +143,16 @@ Resources:
           Condition:
             StringEquals:
               aws:PrincipalOrgID: !Ref OrgID
+        - Sid: DenyNonHttps
+          Effect: Deny
+          Principal: "*"
+          Action: s3:*
+          Resource: 
+            - !Sub arn:${AWS::Partition}:s3:::${ManagedInstancesDataBucket}/*
+            - !Sub arn:${AWS::Partition}:s3:::${ManagedInstancesDataBucket}
+          Condition:
+            Bool:
+              aws:SecureTransport: false
 
 # Patching resources
   PatchingExecutionLogsBucket:
@@ -190,6 +200,16 @@ Resources:
           Condition:
             StringEquals:
               aws:PrincipalOrgID: !Ref OrgID
+        - Sid: DenyNonHttps
+          Effect: Deny
+          Principal: "*"
+          Action: s3:*
+          Resource: 
+            - !Sub arn:${AWS::Partition}:s3:::${ManagedInstancesDataBucket}/*
+            - !Sub arn:${AWS::Partition}:s3:::${ManagedInstancesDataBucket}
+          Condition:
+            Bool:
+              aws:SecureTransport: false
 
   PatchingWindowProduct:
     Type: AWS::ServiceCatalog::CloudFormationProduct
@@ -375,6 +395,16 @@ Resources:
           Condition:
             StringEquals:
               aws:PrincipalOrgID: !Ref OrgID
+        - Sid: DenyNonHttps
+          Effect: Deny
+          Principal: "*"
+          Action: s3:*
+          Resource: 
+            - !Sub arn:${AWS::Partition}:s3:::${ManagedInstancesDataBucket}/*
+            - !Sub arn:${AWS::Partition}:s3:::${ManagedInstancesDataBucket}
+          Condition:
+            Bool:
+              aws:SecureTransport: false
 
 # Reporting resources
   GlueDatabase:
@@ -582,6 +612,16 @@ Resources:
           - s3:GetObject
           - s3:PutObject
           Resource: !Sub arn:${AWS::Partition}:s3:::${AthenaQueryResultsBucket}/*
+        - Sid: DenyNonHttps
+          Effect: Deny
+          Principal: "*"
+          Action: s3:*
+          Resource: 
+            - !Sub arn:${AWS::Partition}:s3:::${ManagedInstancesDataBucket}/*
+            - !Sub arn:${AWS::Partition}:s3:::${ManagedInstancesDataBucket}
+          Condition:
+            Bool:
+              aws:SecureTransport: false
 
   AthenaQueryNonCompliantPatch:
     Type: AWS::Athena::NamedQuery
